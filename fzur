@@ -10,10 +10,10 @@ function update_repo {
     mkdir -p "$HOME/.cache/fzur/pkgbuild"
     cd "$HOME/.cache/fzur/pkgbuild"
     if [ -d $1 ]; then
-        cd $pkg
-        #git pull --quiet
+        cd $1
+        git pull --quiet
     else
-        git clone "https://aur.archlinux.org/$pkg"
+        git clone "https://aur.archlinux.org/$1"
         cd $1
     fi
 }
@@ -49,7 +49,7 @@ function aur_install {
     # TODO: Multi-select (-m)
     # bash -c is needed to recognize the export if the default shell something else
     pkg=$(cat packages.txt | fzf --preview 'bash -c "preview {1}"') || exit 1
-    update_repo $1
+    update_repo $pkg
     makepkg -si
 }
 
