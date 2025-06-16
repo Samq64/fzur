@@ -1,0 +1,2 @@
+# fzur
+fzf AUR helper
