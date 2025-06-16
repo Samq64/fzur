@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -o pipefail # Add -eu for error and unbound variable checking
+
+# https://stackoverflow.com/a/2924755
+bold=$(tput bold)
+reset=$(tput sgr0)
+
+
+function update_repo {
+    mkdir -p "$HOME/.cache/fzur/pkgbuild"
+    cd "$HOME/.cache/fzur/pkgbuild"
+    if [ -d $1 ]; then
+        cd $pkg
+        #git pull --quiet
+    else
+        git clone "https://aur.archlinux.org/$pkg"
+        cd $1
+    fi
+}
+
+function preview {
+    cd "$HOME/.cache/fzur/pkginfo/"
+    if [ ! -s "$1.json" ]; then
+        # TODO: Prevent any empty files in the first place
+        # TODO: Invalidate cache after some time
+        curl -s "https://aur.archlinux.org/rpc/v5/info?arg[]=$1" | jq '.["results"][0]' > "$1.json"
+    fi
+
+    # TODO: Fill out the rest of the information, combine some jq queries?
+    echo "Version: $(jq -r '.Version' $1.json)"
+    echo "Package Base: $(jq -r '.PackageBase' $1.json)"
+    echo "Description: $(jq -r '.Description' $1.json)"
+    echo "Upstream URL: $(jq -r '.URL' $1.json)"
+    echo "Submitter: $(jq -r '.Submitter' $1.json)"
+    echo "Maintainer: $(jq -r '.Maintainer' $1.json)"
+    echo "Votes: $(jq -r '.NumVotes' $1.json)"
+    echo "Popularity: $(jq -r '.Popularity' $1.json)"
+}
+
+function aur_install {
+    mkdir -p "$HOME/.cache/fzur/pkginfo/"
+    cd "$HOME/.cache/fzur"
+
+    if [ ! -f packages.txt ]; then
+        echo -e "${bold}Downloading AUR package list...\n${reset}"
+        curl https://aur.archlinux.org/packages.gz | gzip -d > packages.txt
+    fi
+
+    # TODO: Multi-select (-m)
+    # bash -c is needed to recognize the export if the default shell something else
+    pkg=$(cat packages.txt | fzf --preview 'bash -c "preview {1}"') || exit 1
+    update_repo $1
+    makepkg -si
+}
+
+function aur_update {
+    for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
+        update_repo $pkg
+        # https://unix.stackexchange.com/a/327811
+        installed_version=$(pacman -Qi $pkg | grep -Po '^Version\s*: \K.+')
+        new_version="$(grep -Po 'pkgver=\K.+' PKGBUILD)-$(grep -Po 'pkgrel=\K.+' PKGBUILD)"
+        epoch=$(grep -Po 'epoch=\K.+' PKGBUILD)
+        [ $epoch ] && new_version="$epoch:$new_version"
+        if [ "$(vercmp $installed_version $new_version)" -lt 0 ]; then
+            # TODO: Allow package update selection
+            echo -e "${bold}Updating $pkg...${reset}"
+            makepkg -si
+        fi
+    done
+}
+
+export -f preview
+
+# https://linuxize.com/post/bash-case-statement/
+case $1 in
+    '-i' | '--install' | '')
+        aur_install;;
+    '-c' | '--clean')
+        # TODO: Keep repos for installed packages by default
+        rm -rf "$HOME/.cache/fzur";;
+    '-u' | '--update')
+        aur_update;;
+    *)
+        echo "Usage: -${bold}-i${reset}nstall (default), -${bold}-u${reset}pdate or -${bold}-c${reset}lean."
+esac
