@@ -2,9 +2,9 @@
 set -o pipefail # Add -eu for error and unbound variable checking
 
 # https://stackoverflow.com/a/2924755
-bold=$(tput bold)
-reset=$(tput sgr0)
-
+export bold=$(tput bold)
+export reset=$(tput sgr0)
+export red=$(tput setaf 1)
 
 function update_repo {
     mkdir -p "$HOME/.cache/fzur/pkgbuild"
@@ -21,20 +21,43 @@ function update_repo {
 function preview {
     cd "$HOME/.cache/fzur/pkginfo/"
     if [ ! -s "$1.json" ]; then
+        # Download the package info and flattens the arrays into comma separeated strings
         # TODO: Prevent any empty files in the first place
+        info=$(curl -s "https://aur.archlinux.org/rpc/v5/info?arg[]=$1" | jq -c '.["results"][0] | (.. | arrays) |= join(", ")')
+        echo "$info" > "$1.json"
+    else
         # TODO: Invalidate cache after some time
-        curl -s "https://aur.archlinux.org/rpc/v5/info?arg[]=$1" | jq '.["results"][0]' > "$1.json"
+        info="$(cat $1.json)"
     fi
 
-    # TODO: Fill out the rest of the information, combine some jq queries?
-    echo "Version: $(jq -r '.Version' $1.json)"
-    echo "Package Base: $(jq -r '.PackageBase' $1.json)"
-    echo "Description: $(jq -r '.Description' $1.json)"
-    echo "Upstream URL: $(jq -r '.URL' $1.json)"
-    echo "Submitter: $(jq -r '.Submitter' $1.json)"
-    echo "Maintainer: $(jq -r '.Maintainer' $1.json)"
-    echo "Votes: $(jq -r '.NumVotes' $1.json)"
-    echo "Popularity: $(jq -r '.Popularity' $1.json)"
+    maintainer=$(jq -r '.Maintainer' <<< $info)
+    if [ "$maintainer" = null ]; then
+        maintainer="${red}orphan${reset}"
+    fi
+
+    outdated_timestamp=$(jq -r '.OutOfDate' <<< $info)
+    if [ "$outdated_timestamp" != null ]; then
+        outOfDate="${red} out-of-date ($(date -d @${outdated_timestamp} --iso-8601))${reset}"
+    fi
+
+    cat << EOF
+${bold}Package Base${reset}    $(jq -r '.PackageBase' <<< $info)
+${bold}Description${reset}     $(jq -r '.Description' <<< $info)
+${bold}Version${reset}         $(jq -r '.Version' <<< $info)${outOfDate}
+${bold}Upstream URL${reset}    $(jq -r '.URL' <<< $info)
+${bold}Licenses${reset}        $(jq -r '.License' <<< $info)
+${bold}Conflicts${reset}       $(jq -r '.Conflicts' <<< $info)
+${bold}Provides${reset}        $(jq -r '.Provides' <<< $info)
+${bold}Submitter${reset}       $(jq -r '.Submitter' <<< $info)
+${bold}Maintainer${reset}      $maintainer
+${bold}Votes${reset}           $(jq -r '.NumVotes' <<< $info)
+${bold}Popularity${reset}      $(jq -r '.Popularity' <<< $info)
+${bold}Depends On${reset}      $(jq -r '.Depends' <<< $info)
+${bold}Optional Deps${reset}   $(jq -r '.OptDepends' <<< $info)
+${bold}Make Deps${reset}       $(jq -r '.MakeDepends' <<< $info)
+${bold}First Submitted${reset} $(date -d @$(jq -r '.FirstSubmitted' <<< $info))
+${bold}Last Modified${reset}   $(date -d @$(jq -r '.LastModified' <<< $info))
+EOF
 }
 
 function aur_install {
@@ -48,7 +71,7 @@ function aur_install {
 
     # TODO: Multi-select (-m)
     # bash -c is needed to recognize the export if the default shell something else
-    pkg=$(cat packages.txt | fzf --preview 'bash -c "preview {1}"') || exit 1
+    pkg=$(cat packages.txt | fzf --preview 'bash -c "preview {1}"' --preview-window 75%,wrap) || exit 1
     update_repo $pkg
     makepkg -si
 }
