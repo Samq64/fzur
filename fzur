@@ -18,6 +18,18 @@ function update_repo {
     fi
 }
 
+function aur_install {
+    printf "View PKGBUILD for $1? (y/n): "
+    read answer
+    if [ ${answer,,} = y ]; then
+        less PKGBUILD
+        printf "Continue installation? (y/n): "
+        read answer
+        [ ${answer,,} = y ] || exit
+    fi
+    makepkg -si
+}
+
 function preview {
     cd "$HOME/.cache/fzur/pkginfo/"
     if [ ! -s "$1.json" ]; then
@@ -60,7 +72,7 @@ ${bold}Last Modified${reset}   $(date -d @$(jq -r '.LastModified' <<< $info))
 EOF
 }
 
-function aur_install {
+function aur_select {
     mkdir -p "$HOME/.cache/fzur/pkginfo/"
     cd "$HOME/.cache/fzur"
 
@@ -69,11 +81,14 @@ function aur_install {
         curl https://aur.archlinux.org/packages.gz | gzip -d > packages.txt
     fi
 
-    # TODO: Multi-select (-m)
     # bash -c is needed to recognize the export if the default shell something else
-    pkg=$(cat packages.txt | fzf --preview 'bash -c "preview {1}"' --preview-window 75%,wrap) || exit 1
-    update_repo $pkg
-    makepkg -si
+    pkgs=$(fzf -m --preview 'bash -c "preview {1}"' --preview-window 75%,wrap < packages.txt)
+    # TODO: Determine and install AUR-only dependencies
+    for pkg in $pkgs; do
+        echo -e "${bold}Preparing to install $pkg...${reset}"
+        update_repo $pkg
+        aur_install $pkg
+    done
 }
 
 function aur_update {
@@ -87,7 +102,7 @@ function aur_update {
         if [ "$(vercmp $installed_version $new_version)" -lt 0 ]; then
             # TODO: Allow package update selection
             echo -e "${bold}Updating $pkg...${reset}"
-            makepkg -si
+            aur_install $pkg
         fi
     done
 }
@@ -97,7 +112,7 @@ export -f preview
 # https://linuxize.com/post/bash-case-statement/
 case $1 in
     '-i' | '--install' | '')
-        aur_install;;
+        aur_select;;
     '-c' | '--clean')
         # TODO: Keep repos for installed packages by default
         rm -rf "$HOME/.cache/fzur";;
