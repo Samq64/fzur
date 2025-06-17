@@ -19,6 +19,7 @@ function update_repo {
 }
 
 function aur_install {
+    cd "$HOME/.cache/fzur/pkgbuild/$1"
     printf "View PKGBUILD for $1? (y/n): "
     read answer
     if [ ${answer,,} = y ]; then
@@ -92,6 +93,8 @@ function aur_select {
 }
 
 function aur_update {
+    updates=()
+    echo "Checking for AUR updates..."
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
         update_repo $pkg
         # https://unix.stackexchange.com/a/327811
@@ -99,11 +102,13 @@ function aur_update {
         new_version="$(grep -Po 'pkgver=\K.+' PKGBUILD)-$(grep -Po 'pkgrel=\K.+' PKGBUILD)"
         epoch=$(grep -Po 'epoch=\K.+' PKGBUILD)
         [ $epoch ] && new_version="$epoch:$new_version"
-        if [ "$(vercmp $installed_version $new_version)" -lt 0 ]; then
-            # TODO: Allow package update selection
-            echo -e "${bold}Updating $pkg...${reset}"
-            aur_install $pkg
-        fi
+        [ "$(vercmp $installed_version $new_version)" -lt 0 ] && updates+=($pkg)
+    done
+
+    selected=$(echo ${updates[@]} | tr ' ' '\n' | fzf -m --bind 'load:select-all')
+    for pkg in $selected; do
+        echo -e "${bold}Updating $pkg...${reset}"
+        aur_install $pkg
     done
 }
 
