@@ -99,8 +99,8 @@ function aur_update {
         update_repo $pkg
         # https://unix.stackexchange.com/a/327811
         installed_version=$(pacman -Qi $pkg | grep -Po '^Version\s*: \K.+')
-        new_version="$(grep -Po 'pkgver=\K.+' PKGBUILD)-$(grep -Po 'pkgrel=\K.+' PKGBUILD)"
-        epoch=$(grep -Po 'epoch=\K.+' PKGBUILD)
+        new_version="$(grep -Po 'pkgver\s*=\s*\K.+' .SRCINFO)-$(grep -Po 'pkgrel\s*=\s*\K.+' .SRCINFO)"
+        epoch=$(grep -Po 'epoch\s*=\s*\K.+' .SRCINFO)
         [ $epoch ] && new_version="$epoch:$new_version"
         [ "$(vercmp $installed_version $new_version)" -lt 0 ] && updates+=($pkg)
     done
