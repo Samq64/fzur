@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 set -o pipefail # Add -eu for error and unbound variable checking
 
+CACHE_DIR="$HOME/.cache/fzur"
+INFO_DIR="$CACHE_DIR/pkginfo"
+PKGS_DIR="$CACHE_DIR/pkgbuild"
 # https://stackoverflow.com/a/2924755
 export bold=$(tput bold)
 export reset=$(tput sgr0)
 export red=$(tput setaf 1)
 
 function update_repo {
-    mkdir -p "$HOME/.cache/fzur/pkgbuild"
-    cd "$HOME/.cache/fzur/pkgbuild"
+    mkdir -p $PKGS_DIR
+    cd $PKGS_DIR
     if [ -d $1 ]; then
         cd $1
         git pull --quiet
@@ -19,16 +22,16 @@ function update_repo {
 }
 
 function download_pkg_info {
-    if [ ! -s "$HOME/.cache/fzur/pkginfo/$1.json" ]; then
+    if [ ! -s "$INFO_DIR/$1.json" ]; then
         # Download the package info and flattens the arrays into comma separeated strings
         # TODO: Prevent any empty files in the first place
-        curl -s "https://aur.archlinux.org/rpc/v5/info?arg[]=$1" | jq -c '.["results"][0] | (.. | arrays) |= join(", ")' > "$HOME/.cache/fzur/pkginfo/$1.json"
+        curl -s "https://aur.archlinux.org/rpc/v5/info?arg[]=$1" | jq -c '.["results"][0] | (.. | arrays) |= join(", ")' > "$INFO_DIR/$1.json"
     fi
 }
 
 function aur_install {
     download_pkg_info $1
-    deps=$(jq -r '.Depends' < "$HOME/.cache/fzur/pkginfo/$1.json" | tr ', ' '\n' | sort)
+    deps=$(jq -r '.Depends' < "$INFO_DIR/$1.json" | tr ', ' '\n' | sort)
     if [ "$deps" != null ]; then
         for dep in $(comm -13 <(cat <(pacman -Ssq) <(pacman -Qm) | sort) <(echo "$deps")); do
             echo "${bold}Installing AUR dependency: ${dep}${reset}"
@@ -37,7 +40,7 @@ function aur_install {
         done
     fi
 
-    cd "$HOME/.cache/fzur/pkgbuild/$1"
+    cd $PKGS_DIR
 
     printf "View PKGBUILD for $1? (y/n): "
     read answer
@@ -51,7 +54,7 @@ function aur_install {
 }
 
 function preview {
-    cd "$HOME/.cache/fzur/pkginfo/"
+    cd $INFO_DIR
     download_pkg_info $1
     # TODO: Invalidate cache after some time
     info="$(cat $1.json)"
@@ -87,8 +90,8 @@ EOF
 }
 
 function aur_select {
-    mkdir -p "$HOME/.cache/fzur/pkginfo/"
-    cd "$HOME/.cache/fzur"
+    mkdir -p $INFO_DIR
+    cd $CACHE_DIR
 
     if [ ! -f packages.txt ]; then
         echo -e "${bold}Downloading AUR package list...\n${reset}"
@@ -132,7 +135,7 @@ case $1 in
         aur_select;;
     '-c' | '--clean')
         # TODO: Keep repos for installed packages by default
-        rm -rf "$HOME/.cache/fzur";;
+        rm -rf $CACHE_DIR;;
     '-u' | '--update')
         aur_update;;
     *)
