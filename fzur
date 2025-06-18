@@ -4,6 +4,7 @@ set -o pipefail # Add -eu for error and unbound variable checking
 CACHE_DIR="$HOME/.cache/fzur"
 INFO_DIR="$CACHE_DIR/pkginfo"
 PKGS_DIR="$CACHE_DIR/pkgbuild"
+
 # https://stackoverflow.com/a/2924755
 export bold=$(tput bold)
 export reset=$(tput sgr0)
@@ -33,7 +34,7 @@ function aur_install {
     download_pkg_info $1
     deps=$(jq -r '.Depends' < "$INFO_DIR/$1.json" | tr ', ' '\n' | sort)
     if [ "$deps" != null ]; then
-        for dep in $(comm -13 <(cat <(pacman -Ssq) <(pacman -Qm) | sort) <(echo "$deps")); do
+        for dep in $(comm -13 <(cat <(pacman -Ssq) <(pacman -Qqm) | sort) <(echo "$deps")); do
             echo "${bold}Installing AUR dependency: ${dep}${reset}"
             update_repo $dep
             aur_install $dep --asdeps
@@ -84,8 +85,8 @@ ${bold}Popularity${reset}      $(jq -r '.Popularity' <<< $info)
 ${bold}Depends On${reset}      $(jq -r '.Depends' <<< $info)
 ${bold}Optional Deps${reset}   $(jq -r '.OptDepends' <<< $info)
 ${bold}Make Deps${reset}       $(jq -r '.MakeDepends' <<< $info)
-${bold}First Submitted${reset} $(date -d @$(jq -r '.FirstSubmitted' <<< $info))
-${bold}Last Modified${reset}   $(date -d @$(jq -r '.LastModified' <<< $info))
+${bold}First Submitted${reset} $(date -d @"$(jq -r '.FirstSubmitted' <<< $info)")
+${bold}Last Modified${reset}   $(date -d @"$(jq -r '.LastModified' <<< $info)")
 EOF
 }
 
@@ -117,10 +118,10 @@ function aur_update {
         new_version="$(grep -Po 'pkgver\s*=\s*\K.+' .SRCINFO)-$(grep -Po 'pkgrel\s*=\s*\K.+' .SRCINFO)"
         epoch=$(grep -Po 'epoch\s*=\s*\K.+' .SRCINFO)
         [ $epoch ] && new_version="$epoch:$new_version"
-        [ "$(vercmp $installed_version $new_version)" -lt 0 ] && updates+=($pkg)
+        [ "$(vercmp "$installed_version" "$new_version")" -lt 0 ] && updates+=("$pkg")
     done
 
-    selected=$(echo ${updates[@]} | tr ' ' '\n' | fzf -m --bind 'load:select-all')
+    selected=$(echo "${updates[@]}" | tr ' ' '\n' | fzf -m --bind 'load:select-all')
     for pkg in $selected; do
         echo -e "${bold}Updating $pkg...${reset}"
         aur_install $pkg
