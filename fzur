@@ -18,8 +18,27 @@ function update_repo {
     fi
 }
 
+function download_pkg_info {
+    if [ ! -s "$HOME/.cache/fzur/pkginfo/$1.json" ]; then
+        # Download the package info and flattens the arrays into comma separeated strings
+        # TODO: Prevent any empty files in the first place
+        curl -s "https://aur.archlinux.org/rpc/v5/info?arg[]=$1" | jq -c '.["results"][0] | (.. | arrays) |= join(", ")' > "$HOME/.cache/fzur/pkginfo/$1.json"
+    fi
+}
+
 function aur_install {
+    download_pkg_info $1
+    deps=$(jq -r '.Depends' < "$HOME/.cache/fzur/pkginfo/$1.json" | tr ', ' '\n' | sort)
+    if [ "$deps" != null ]; then
+        for dep in $(comm -13 <(cat <(pacman -Ssq) <(pacman -Qm) | sort) <(echo "$deps")); do
+            echo "${bold}Installing AUR dependency: ${dep}${reset}"
+            update_repo $dep
+            aur_install $dep --asdeps
+        done
+    fi
+
     cd "$HOME/.cache/fzur/pkgbuild/$1"
+
     printf "View PKGBUILD for $1? (y/n): "
     read answer
     if [ ${answer,,} = y ]; then
@@ -28,20 +47,14 @@ function aur_install {
         read answer
         [ ${answer,,} = y ] || exit
     fi
-    makepkg -si
+    makepkg -si $2
 }
 
 function preview {
     cd "$HOME/.cache/fzur/pkginfo/"
-    if [ ! -s "$1.json" ]; then
-        # Download the package info and flattens the arrays into comma separeated strings
-        # TODO: Prevent any empty files in the first place
-        info=$(curl -s "https://aur.archlinux.org/rpc/v5/info?arg[]=$1" | jq -c '.["results"][0] | (.. | arrays) |= join(", ")')
-        echo "$info" > "$1.json"
-    else
-        # TODO: Invalidate cache after some time
-        info="$(cat $1.json)"
-    fi
+    download_pkg_info $1
+    # TODO: Invalidate cache after some time
+    info="$(cat $1.json)"
 
     maintainer=$(jq -r '.Maintainer' <<< $info)
     if [ "$maintainer" = null ]; then
@@ -84,7 +97,6 @@ function aur_select {
 
     # bash -c is needed to recognize the export if the default shell something else
     pkgs=$(fzf -m --preview 'bash -c "preview {1}"' --preview-window 75%,wrap < packages.txt)
-    # TODO: Determine and install AUR-only dependencies
     for pkg in $pkgs; do
         echo -e "${bold}Preparing to install $pkg...${reset}"
         update_repo $pkg
