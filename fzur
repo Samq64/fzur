@@ -2,7 +2,6 @@
 set -o pipefail # Add -eu for error and unbound variable checking
 
 CACHE_DIR="$HOME/.cache/fzur"
-INFO_DIR="$CACHE_DIR/pkginfo"
 PKGS_DIR="$CACHE_DIR/pkgbuild"
 SCRIPT_DIR=$(pwd)
 
@@ -22,17 +21,9 @@ function update_repo {
     fi
 }
 
-function download_pkg_info {
-    if [ ! -s "$INFO_DIR/$1.json" ]; then
-        # Download the package info and flattens the arrays into comma separeated strings
-        # TODO: Prevent any empty files in the first place
-        curl -s "https://aur.archlinux.org/rpc/v5/info?arg[]=$1" | jq -c '.["results"][0] | (.. | arrays) |= join(", ")' > "$INFO_DIR/$1.json"
-    fi
-}
-
 function aur_install {
-    download_pkg_info $1
-    deps=$(jq -r '.Depends' < "$INFO_DIR/$1.json" | tr ', ' '\n' | sort)
+    deps=$(grep -Po '^\s*depends\s*=\s*\K.+' .SRCINFO | sort | uniq)
+    echo -e "$deps"
     if [ "$deps" != null ]; then
         for dep in $(comm -13 <(cat <(pacman -Ssq) <(pacman -Qqm) | sort) <(echo "$deps")); do
             echo "${bold}Installing AUR dependency: ${dep}${reset}"
@@ -41,7 +32,7 @@ function aur_install {
         done
     fi
 
-    cd $PKGS_DIR
+    cd "$PKGS_DIR/$1"
 
     printf "View PKGBUILD for $1? (y/n): "
     read answer
@@ -55,7 +46,7 @@ function aur_install {
 }
 
 function aur_select {
-    mkdir -p $INFO_DIR
+    mkdir -p $CACHE_DIR
     cd $CACHE_DIR
 
     if [ ! -f packages.txt ]; then
