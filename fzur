@@ -10,44 +10,44 @@ bold=$(tput bold)
 reset=$(tput sgr0)
 
 function update_repo {
-    mkdir -p $PKGS_DIR
-    cd $PKGS_DIR
-    if [ -d $1 ]; then
-        cd $1
+    mkdir -p "$PKGS_DIR"
+    cd "$PKGS_DIR" || exit
+    if [ -d "$1" ]; then
+        cd "$1" || exit
         git pull --quiet
     else
         git clone "https://aur.archlinux.org/$1"
-        cd $1
+        cd "$1" || exit
     fi
 }
 
 function aur_install {
     deps=$(grep -Po '^\s*depends\s*=\s*\K.+' .SRCINFO | sort | uniq)
-    echo -e "$deps"
     if [ "$deps" != null ]; then
         for dep in $(comm -13 <(cat <(pacman -Ssq) <(pacman -Qqm) | sort) <(echo "$deps")); do
+            # TODO: Check if repos can provide the package
             echo "${bold}Installing AUR dependency: ${dep}${reset}"
-            update_repo $dep
-            aur_install $dep --asdeps
+            update_repo "$dep"
+            aur_install "$dep" --asdeps
         done
     fi
 
-    cd "$PKGS_DIR/$1"
+    cd "$PKGS_DIR/$1" || exit
 
-    printf "View PKGBUILD for $1? (y/n): "
-    read answer
-    if [ ${answer,,} = y ]; then
+    printf 'View PKGBUILD for %s? (y/n): ' "$1"
+    read -r answer
+    if [ "${answer,,}" = y ]; then
         less PKGBUILD
-        printf "Continue installation? (y/n): "
-        read answer
-        [ ${answer,,} = y ] || exit
+        printf 'Continue installation? (y/n): '
+        read -r answer
+        [ "${answer,,}" = y ] || exit
     fi
-    makepkg -si $2
+    makepkg -si "$2"
 }
 
 function aur_select {
-    mkdir -p $CACHE_DIR
-    cd $CACHE_DIR
+    mkdir -p "$CACHE_DIR"
+    cd "$CACHE_DIR" || exit
 
     if [ ! -f packages.txt ]; then
         echo -e "${bold}Downloading AUR package list...\n${reset}"
@@ -58,8 +58,8 @@ function aur_select {
     pkgs=$(fzf -m --preview "$SCRIPT_DIR/aur-preview.sh {}" --preview-window 75%,wrap < packages.txt)
     for pkg in $pkgs; do
         echo -e "${bold}Preparing to install $pkg...${reset}"
-        update_repo $pkg
-        aur_install $pkg
+        update_repo "$pkg"
+        aur_install "$pkg"
     done
 }
 
@@ -67,19 +67,19 @@ function aur_update {
     updates=()
     echo "Checking for AUR updates..."
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
-        update_repo $pkg
+        update_repo "$pkg"
         # https://unix.stackexchange.com/a/327811
-        installed_version=$(pacman -Qi $pkg | grep -Po '^Version\s*: \K.+')
-        new_version="$(grep -Po 'pkgver\s*=\s*\K.+' .SRCINFO)-$(grep -Po 'pkgrel\s*=\s*\K.+' .SRCINFO)"
+        installed_version=$(pacman -Qi "$pkg" | grep -Po '^Version\s*: \K.+')
+        new_version=$(grep -Po 'pkgver\s*=\s*\K.+' .SRCINFO)-$(grep -Po 'pkgrel\s*=\s*\K.+' .SRCINFO)
         epoch=$(grep -Po 'epoch\s*=\s*\K.+' .SRCINFO)
-        [ $epoch ] && new_version="$epoch:$new_version"
+        [ "$epoch" ] && new_version="$epoch:$new_version"
         [ "$(vercmp "$installed_version" "$new_version")" -lt 0 ] && updates+=("$pkg")
     done
 
     selected=$(echo "${updates[@]}" | tr ' ' '\n' | fzf -m --bind 'load:select-all')
     for pkg in $selected; do
         echo -e "${bold}Updating $pkg...${reset}"
-        aur_install $pkg
+        aur_install "$pkg"
     done
 }
 
@@ -89,7 +89,7 @@ case $1 in
         aur_select;;
     '-c' | '--clean')
         # TODO: Keep repos for installed packages by default
-        rm -rf $CACHE_DIR;;
+        rm -rf "$CACHE_DIR";;
     '-u' | '--update')
         aur_update;;
     *)
