@@ -2,6 +2,7 @@
 set -euo pipefail
 
 bold=$(tput bold)
+dim=$(tput dim)
 red=$(tput setaf 1)
 reset=$(tput sgr0)
 
@@ -17,7 +18,7 @@ if [ -s "$1.json" ]; then
     info=$(cat "$1.json")
 else
     # Download the package info and flatten the arrays into comma separeated strings
-    info=$(curl -s "https://aur.archlinux.org/rpc/v5/info?arg[]=$1" | jq -c '.["results"][0] | (.. | arrays) |= join(", ")')
+    info=$(curl -s "https://aur.archlinux.org/rpc/v5/info?arg=$1" | jq -c '.["results"][0] | (.. | arrays) |= join(", ")')
     if [ "$info" = null ]; then
         echo "${red}AUR package not found: $1${reset}"
         exit 1
@@ -26,14 +27,19 @@ else
 fi
 
 get() {
-    jq --arg key "$1" -r '.[$key]' <<< "$info"
+    val=$(jq --arg key "$1" -r '.[$key]' <<< "$info")
+    # Skip extra formatting with any 2nd argument
+    if [ $# -lt 2 ] && [ "$val" = null ]; then
+        val="${dim}none${reset}"
+    fi
+    echo "$val"
 }
 
-maintainer=$(get Maintainer)
+maintainer=$(get Maintainer --raw)
 [ "$maintainer" = null ] && maintainer=${red}orphan${reset}
 
 version_label=$(get Version)
-outdated_timestamp=$(get OutOfDate)
+outdated_timestamp=$(get OutOfDate --raw)
 if [ "$outdated_timestamp" != null ]; then
     version_label+=" ${red}out-of-date ($(date -d @"${outdated_timestamp}" +%F))${reset}"
 fi
