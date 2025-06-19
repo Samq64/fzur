@@ -22,15 +22,14 @@ function update_repo {
 }
 
 function aur_install {
-    deps=$(grep -Po '^\s*depends\s*=\s*\K.+' .SRCINFO | sort | uniq)
-    if [ "$deps" != null ]; then
-        for dep in $(comm -13 <(cat <(pacman -Ssq) <(pacman -Qqm) | sort) <(echo "$deps")); do
-            # TODO: Check if repos can provide the package
+    for dep in $(grep -Po '^\s*depends\s*=\s*\K.+' .SRCINFO); do
+        # The local package check is for already installed AUR packages
+        if [ ! "$(pacman -Ssq "^$dep$")" ] && [ ! "$(pacman -Qqs "^$dep$")" ]; then
             echo "${bold}Installing AUR dependency: ${dep}${reset}"
             update_repo "$dep"
             aur_install "$dep" --asdeps
-        done
-    fi
+        fi
+    done
 
     cd "$PKGS_DIR/$1" || exit
 
