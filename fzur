@@ -85,9 +85,9 @@ aur_install() {
 }
 
 aur_select() {
-    [ -f "$CACHE_DIR/packages.json" ] || download_aur_list
+    [ -f "$CACHE_DIR/packages.txt" ] || download_aur_list
     pkgs=$(fzf -m --reverse --header 'AUR packages to install' --header-first \
-        --preview "$SCRIPT_DIR/aur-preview.sh {}" --preview-window 75%,wrap < packages.txt | xargs)
+        --preview "$SCRIPT_DIR/aur-preview.sh {}" --preview-window 75%,wrap < "$CACHE_DIR/packages.txt" | xargs)
     aur_install "$pkgs"
 }
 
