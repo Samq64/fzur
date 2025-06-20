@@ -21,27 +21,54 @@ function update_repo {
     fi
 }
 
-function aur_install {
-    for dep in $(grep -Po '^\s*depends\s*=\s*\K.+' .SRCINFO); do
-        # The local package check is for already installed AUR packages
-        if [ ! "$(pacman -Ssq "^$dep$")" ] && [ ! "$(pacman -Qqs "^$dep$")" ]; then
-            echo "${bold}Installing AUR dependency: ${dep}${reset}"
-            update_repo "$dep"
-            aur_install "$dep" --asdeps
+get_dependencies() {
+    update_repo "$1"
+    for dep in $(grep -Po '^\s*(make)?depends\s*=\s*\K.+' .SRCINFO); do
+        [ "$(pacman -Qqs "^$dep$")" ] && continue
+        if [ "$(pacman -Ssq "^$dep$")" ]; then
+            pacman_deps+=("$dep")
+        else
+            aur_deps+=("$dep")
+            get_dependencies "$dep"
         fi
     done
+}
 
-    cd "$PKGS_DIR/$1" || exit
+aur_install() {
+    aur_deps=()
+    pacman_deps=()
 
-    printf 'View PKGBUILD for %s? (y/n): ' "$1"
-    read -r answer
-    if [ "${answer,,}" = y ]; then
-        less PKGBUILD
-        printf 'Continue installation? (y/n): '
-        read -r answer
-        [ "${answer,,}" = y ] || exit
+    for selected in $1; do
+        get_dependencies "$selected"
+    done
+
+    [ ${#aur_deps[@]} -gt 0 ] && echo AUR dependencies: "${aur_deps[@]}"
+
+    if [ ${#pacman_deps[@]} -gt 0 ]; then
+        echo Pacman dependencies: "${pacman_deps[@]}"
+        sudo pacman -S --asdeps --needed "${pacman_deps[@]}"
     fi
-    makepkg -si "$2"
+
+    aur_pkgs=(${aur_deps[@]} $1)
+
+    for pkg in "${aur_pkgs[@]}"; do
+        cd "$PKGS_DIR/$pkg" || exit
+
+        printf 'View PKGBUILD for %s? (y/n): ' "$pkg"
+        read -r answer
+        if [ "${answer,,}" = y ]; then
+            less PKGBUILD
+            printf 'Continue installation? (y/n): '
+            read -r answer
+            [ "${answer,,}" = y ] || exit
+        fi
+
+        makepkg
+        built_pkgs+="$(makepkg --packagelist) "
+    done
+
+    sudo pacman -U --asdeps $(echo "$built_pkgs" | xargs)
+    sudo pacman -Dq --asexplicit $1
 }
 
 function aur_select {
@@ -53,18 +80,15 @@ function aur_select {
         curl https://aur.archlinux.org/packages.gz | gzip -d > packages.txt
     fi
 
-    # bash -c is needed to recognize the export if the default shell something else
-    pkgs=$(fzf -m --preview "$SCRIPT_DIR/aur-preview.sh {}" --preview-window 75%,wrap < packages.txt)
-    for pkg in $pkgs; do
-        echo -e "${bold}Preparing to install $pkg...${reset}"
-        update_repo "$pkg"
-        aur_install "$pkg"
-    done
+    pkgs=$(fzf -m --preview "$SCRIPT_DIR/aur-preview.sh {}" --preview-window 75%,wrap < packages.txt | xargs)
+    echo "Selected: $pkgs"
+    aur_install "$pkgs"
 }
 
 function aur_update {
     updates=()
     echo "Checking for AUR updates..."
+
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
         update_repo "$pkg"
         # https://unix.stackexchange.com/a/327811
@@ -75,11 +99,7 @@ function aur_update {
         [ "$(vercmp "$installed_version" "$new_version")" -lt 0 ] && updates+=("$pkg")
     done
 
-    selected=$(echo "${updates[@]}" | tr ' ' '\n' | fzf -m --bind 'load:select-all')
-    for pkg in $selected; do
-        echo -e "${bold}Updating $pkg...${reset}"
-        aur_install "$pkg"
-    done
+    aur_install $(echo "${updates[@]}" | tr ' ' '\n' | fzf -m --bind 'load:select-all' | xargs)
 }
 
 # https://linuxize.com/post/bash-case-statement/
