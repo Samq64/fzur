@@ -21,6 +21,13 @@ function update_repo {
     fi
 }
 
+download_aur_list() {
+    mkdir -p "$CACHE_DIR"
+    cd "$CACHE_DIR" || exit
+    echo -e "${bold}Downloading AUR package list...\n${reset}"
+    curl https://aur.archlinux.org/packages.gz | gzip -d > packages.txt
+}
+
 get_dependencies() {
     update_repo "$1"
     for dep in $(grep -Po '^\s*(make)?depends\s*=\s*\K.+' .SRCINFO); do
@@ -38,6 +45,7 @@ aur_install() {
     aur_deps=()
     pacman_deps=()
 
+    echo "Selected: $1"
     for selected in $1; do
         get_dependencies "$selected"
     done
@@ -72,15 +80,7 @@ aur_install() {
 }
 
 function aur_select {
-    mkdir -p "$CACHE_DIR"
-    cd "$CACHE_DIR" || exit
-
-    if [ ! -f packages.txt ]; then
-        echo -e "${bold}Downloading AUR package list...\n${reset}"
-        curl https://aur.archlinux.org/packages.gz | gzip -d > packages.txt
-    fi
-
-    echo "Selected: $pkgs"
+    [ -f "$CACHE_DIR/packages.json" ] || download_aur_list
     pkgs=$(fzf -m --reverse --header 'AUR packges to install' --header-first \
         --preview "$SCRIPT_DIR/aur-preview.sh {}" --preview-window 75%,wrap < packages.txt | xargs)
     aur_install "$pkgs"
@@ -113,8 +113,12 @@ case $1 in
     '-c' | '--clean')
         # TODO: Keep repos for installed packages by default
         rm -rf "$CACHE_DIR";;
+    '-s' | '--sync')
+        rm -rf "$CACHE_DIR/info"
+        download_aur_list
+        ;;
     '-u' | '--update')
         aur_update;;
     *)
-        echo "Usage: -${bold}-i${reset}nstall (default), -${bold}-u${reset}pdate or -${bold}-c${reset}lean."
+        echo "Usage: -${bold}-i${reset}nstall (default), -${bold}-u${reset}pdate, -${bold}-s${reset}ync or -${bold}-c${reset}lean."
 esac
