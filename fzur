@@ -32,7 +32,7 @@ download_aur_list() {
 
 get_dependencies() {
     update_repo "$1"
-    for dep in $(grep -Po '^\s*(make)?depends\s*=\s*\K.+' .SRCINFO); do
+    for dep in $(grep -Po '^\s*(make)?depends\s*=\s*\K[\w\-\.]+' .SRCINFO); do
         [ "$(pacman -Qqs "^$dep$")" ] && continue
         if [ "$(pacman -Ssq "^$dep$")" ]; then
             pacman_deps+=("$dep")
