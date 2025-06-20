@@ -80,13 +80,14 @@ function aur_select {
         curl https://aur.archlinux.org/packages.gz | gzip -d > packages.txt
     fi
 
-    pkgs=$(fzf -m --preview "$SCRIPT_DIR/aur-preview.sh {}" --preview-window 75%,wrap < packages.txt | xargs)
     echo "Selected: $pkgs"
+    pkgs=$(fzf -m --reverse --header 'AUR packges to install' --header-first \
+        --preview "$SCRIPT_DIR/aur-preview.sh {}" --preview-window 75%,wrap < packages.txt | xargs)
     aur_install "$pkgs"
 }
 
 function aur_update {
-    updates=()
+    updates=''
     echo "Checking for AUR updates..."
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
@@ -96,10 +97,13 @@ function aur_update {
         new_version=$(grep -Po 'pkgver\s*=\s*\K.+' .SRCINFO)-$(grep -Po 'pkgrel\s*=\s*\K.+' .SRCINFO)
         epoch=$(grep -Po 'epoch\s*=\s*\K.+' .SRCINFO)
         [ "$epoch" ] && new_version="$epoch:$new_version"
-        [ "$(vercmp "$installed_version" "$new_version")" -lt 0 ] && updates+=("$pkg")
+        [ "$(vercmp "$installed_version" "$new_version")" -lt 0 ] && updates+="$pkg ($installed_version => $new_version)\n"
     done
 
-    aur_install $(echo "${updates[@]}" | tr ' ' '\n' | fzf -m --bind 'load:select-all' | xargs)
+    [ "$updates" ] || exit
+
+    aur_install "$(echo -e "$updates" | head -c -1 | fzf --accept-nth 1 -m --reverse \
+        --header 'AUR packges to update' --header-first  --bind 'load:select-all' | xargs)"
 }
 
 # https://linuxize.com/post/bash-case-statement/
