@@ -5,11 +5,13 @@ CACHE_DIR="$HOME/.cache/fzur"
 PKGS_DIR="$CACHE_DIR/pkgbuild"
 SCRIPT_DIR=$(pwd)
 
-# https://stackoverflow.com/a/2924755
 bold=$(tput bold)
 reset=$(tput sgr0)
 
-function update_repo {
+update_repo() {
+    if [ $# = 0 ]; then
+        echo "update_repo: No package name provided." && exit 1
+    fi
     mkdir -p "$PKGS_DIR"
     cd "$PKGS_DIR" || exit
     if [ -d "$1" ]; then
@@ -42,6 +44,9 @@ get_dependencies() {
 }
 
 aur_install() {
+    if [ ! "$1" ]; then
+        echo "aur_install: No packages provided." && exit 1
+    fi
     aur_deps=()
     pacman_deps=()
 
@@ -79,9 +84,9 @@ aur_install() {
     sudo pacman -Dq --asexplicit $1
 }
 
-function aur_select {
+aur_select() {
     [ -f "$CACHE_DIR/packages.json" ] || download_aur_list
-    pkgs=$(fzf -m --reverse --header 'AUR packges to install' --header-first \
+    pkgs=$(fzf -m --reverse --header 'AUR packages to install' --header-first \
         --preview "$SCRIPT_DIR/aur-preview.sh {}" --preview-window 75%,wrap < packages.txt | xargs)
     aur_install "$pkgs"
 }
@@ -103,16 +108,16 @@ function aur_update {
     [ "$updates" ] || exit
 
     aur_install "$(echo -e "$updates" | head -c -1 | fzf --accept-nth 1 -m --reverse \
-        --header 'AUR packges to update' --header-first  --bind 'load:select-all' | xargs)"
+        --header 'AUR packages to update' --header-first  --bind 'load:select-all' | xargs)"
 }
 
 # https://linuxize.com/post/bash-case-statement/
 case $1 in
-    '-i' | '--install' | '')
-        aur_select;;
     '-c' | '--clean')
         # TODO: Keep repos for installed packages by default
         rm -rf "$CACHE_DIR";;
+    '-i' | '--install' | '')
+        aur_select;;
     '-s' | '--sync')
         rm -rf "$CACHE_DIR/info"
         download_aur_list
