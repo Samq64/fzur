@@ -80,7 +80,8 @@ aur_install() {
         fi
 
         makepkg
-        built_pkgs+="$(makepkg --packagelist) "
+
+        built_pkgs+="$(makepkg --packagelist | grep -v '\-debug.*-any.pkg.tar.zst') "
     done
 
     # Should be word split
