@@ -122,10 +122,7 @@ function aur_update {
         --header 'AUR packages to update' --header-first --bind 'load:select-all' | xargs)"
 }
 
-if [ $# -eq 0 ]; then
-    aur_select
-    exit
-fi
+[ $# -eq 0 ] && set -- -i
 
 # https://linuxize.com/post/bash-case-statement/
 case $1 in
@@ -141,6 +138,10 @@ case $1 in
     '-u' | '--update')
         aur_update;;
     *)
-        echo "Usage: -${bold}-i${reset}nstall (default), -${bold}-u${reset}pdate, -${bold}-s${reset}ync or -${bold}-c${reset}lean."
+        echo -e 'Usage: fzur [option]\n'
+        echo -e "-i, --install\tSelect and install AUR packages with fzf (default)"
+        echo -e "-u, --update\tSelect and update AUR packages with fzf"
+        echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"
+        echo -e "-c, --clean.\tClear the cache including all PKGBUILD repositories"
         ;;
 esac
