@@ -79,8 +79,8 @@ aur_install() {
             [ "${answer,,}" = y ] || exit
         fi
 
-        makepkg
-
+        # TODO: Add flag validation
+        makepkg "$@"
         built_pkgs+="$(makepkg --packagelist | grep -v '\-debug.*-any.pkg.tar.zst') "
     done
 
@@ -94,7 +94,7 @@ aur_select() {
     pkgs=$(fzf -m --reverse --header 'AUR packages to install' --header-first \
         --preview "$SCRIPT_DIR/aur-info.sh {}" --preview-window 75% \
         < "$CACHE_DIR/packages.txt" | xargs)
-    aur_install "$pkgs"
+    aur_install "$pkgs" "$@"
 }
 
 function aur_update {
@@ -119,7 +119,7 @@ function aur_update {
     fi
 
     aur_install "$(echo -e "$updates" | head -c -1 | fzf --accept-nth 1 -m --reverse \
-        --header 'AUR packages to update' --header-first --bind 'load:select-all' | xargs)"
+        --header 'AUR packages to update' --header-first --bind 'load:select-all' | xargs)" "$@"
 }
 
 [ $# -eq 0 ] && set -- -i
@@ -130,18 +130,23 @@ case $1 in
         # TODO: Keep repos for installed packages by default
         rm -rf "$CACHE_DIR";;
     '-i' | '--install')
-        aur_select;;
+        shift
+        aur_select "$@"
+        ;;
     '-s' | '--sync')
         rm -rf "$CACHE_DIR/info"
         download_aur_list
         ;;
     '-u' | '--update')
-        aur_update;;
+        shift
+        aur_update "$@"
+        ;;
     *)
-        echo -e 'Usage: fzur [option]\n'
+        echo -e 'Usage: fzur [options]\n'
         echo -e "-i, --install\tSelect and install AUR packages with fzf (default)"
         echo -e "-u, --update\tSelect and update AUR packages with fzf"
         echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"
-        echo -e "-c, --clean.\tClear the cache including all PKGBUILD repositories"
+        echo -e "-c, --clean.\tClear the cache including all PKGBUILD repositories\n"
+        echo "makepkg flags may be passed when using --install or --update"
         ;;
 esac
