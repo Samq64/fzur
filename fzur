@@ -64,20 +64,16 @@ aur_install() {
         sudo pacman -S --asdeps --needed "${pacman_deps[@]}"
     fi
 
+
     # Should be word split
     aur_pkgs=(${aur_deps[@]} $1)
 
+    printf "%s\n" "${aur_pkgs[@]}" | fzf --reverse \
+        --header $'PKGBUILDs\nEnter: Accept all\nEscape: Cancel' --header-first \
+        --preview "cat $PKGS_DIR/{1}/PKGBUILD" --preview-window 75%,wrap
+
     for pkg in "${aur_pkgs[@]}"; do
         cd "$PKGS_DIR/$pkg"
-
-        printf 'View PKGBUILD for %s? (y/n): ' "$pkg"
-        read -r answer
-        if [ "${answer,,}" = y ]; then
-            less PKGBUILD
-            printf 'Continue installation? (y/n): '
-            read -r answer
-            [ "${answer,,}" = y ] || exit
-        fi
 
         # TODO: Add flag validation
         makepkg "$@"
