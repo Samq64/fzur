@@ -2,6 +2,7 @@
 # Requirements: aur-info.sh (needs jq), base-devel, curl, fzf, git
 
 set -euo pipefail
+shopt -s expand_aliases
 
 CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
 PKGS_DIR="$CACHE_DIR/pkgbuild"
@@ -9,6 +10,7 @@ SCRIPT_DIR=$(pwd)
 
 bold=$(tput bold)
 reset=$(tput sgr0)
+alias fzf="fzf --reverse --header-first --preview-window 75%,wrap"
 
 update_repo() {
     if [ $# -lt 1 ]; then
@@ -64,13 +66,11 @@ aur_install() {
         sudo pacman -S --asdeps --needed "${pacman_deps[@]}"
     fi
 
-
     # Should be word split
     aur_pkgs=(${aur_deps[@]} $1)
 
-    printf "%s\n" "${aur_pkgs[@]}" | fzf --reverse \
-        --header $'PKGBUILDs\nEnter: Accept all\nEscape: Cancel' --header-first \
-        --preview "cat $PKGS_DIR/{1}/PKGBUILD" --preview-window 75%,wrap
+    printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat $PKGS_DIR/{1}/PKGBUILD" \
+        --header $'PKGBUILDs\nEnter: Accept all\nEscape: Cancel'
 
     for pkg in "${aur_pkgs[@]}"; do
         cd "$PKGS_DIR/$pkg"
@@ -87,14 +87,13 @@ aur_install() {
 
 aur_select() {
     [ -f "$CACHE_DIR/packages.txt" ] || download_aur_list
-    pkgs=$(fzf -m --reverse --header 'AUR packages to install' --header-first \
-        --preview "$SCRIPT_DIR/aur-info.sh {}" --preview-window 75% \
-        < "$CACHE_DIR/packages.txt" | xargs)
+    pkgs=$(fzf -m --header 'AUR packages to install' \
+    --preview "$SCRIPT_DIR/aur-info.sh {}" < "$CACHE_DIR/packages.txt" | xargs)
     aur_install "$pkgs" "$@"
 }
 
 function aur_update {
-    updates=''
+    updates=()
     echo "Checking for AUR updates..."
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
@@ -106,16 +105,16 @@ function aur_update {
             new_version="$(grep -Po 'epoch\s*=\s*\K.+' .SRCINFO):$new_version"
         fi
         if [ "$(vercmp "$installed_version" "$new_version")" -lt 0 ]; then
-            updates+="$pkg ($installed_version => $new_version)\n"
+            updates+=("$pkg ($installed_version => $new_version)")
         fi
     done
 
-    if [ ! "$updates" ]; then
+    if [ "${#updates[@]}" -eq 0 ]; then
         echo "Up to date" && exit
     fi
 
-    aur_install "$(echo -e "$updates" | head -c -1 | fzf --accept-nth 1 -m --reverse \
-        --header 'AUR packages to update' --header-first --bind 'load:select-all' | xargs)" "$@"
+    aur_install "$(printf "%s\n" "${updates[@]}" | fzf --accept-nth 1 -m \
+        --header 'AUR packages to update' --bind 'load:select-all' | xargs)" "$@"
 }
 
 [ $# -eq 0 ] && set -- -i
