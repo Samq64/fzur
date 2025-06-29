@@ -8,12 +8,14 @@ CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
 PKGS_DIR="$CACHE_DIR/pkgbuild"
 
 bold=$(tput bold)
+red=$(tput setaf 1)
+yellow=$(tput setaf 3)
 reset=$(tput sgr0)
 alias fzf="fzf --reverse --header-first --preview-window 75%,wrap"
 
 update_repo() {
     if [ $# -lt 1 ]; then
-        echo "update_repo: No package name provided." && exit 1
+        echo "${red}update_repo: No package name provided.$reset" && exit 1
     fi
     mkdir -p "$PKGS_DIR"
     cd "$PKGS_DIR"
@@ -21,7 +23,8 @@ update_repo() {
         cd "$1"
         git pull --quiet
     else
-        git clone "https://aur.archlinux.org/$1"
+        echo Cloning "$1"...
+        git clone -q "https://aur.archlinux.org/$1"
         cd "$1"
     fi
 }
@@ -48,12 +51,12 @@ get_dependencies() {
 
 aur_install() {
     if [ ! "$1" ]; then
-        echo "aur_install: No packages provided." && exit 1
+        echo "${red}aur_install: No packages provided.$red" && exit 1
     fi
     aur_pkgs=()
     pacman_pkgs=()
 
-    echo "Selected: $1"
+    echo -e "${bold}Selected:${reset} $1\n"
     for selected in $1; do
         if [ "$(pacman -Ssq "^$selected$")" ]; then
             pacman_pkgs+=("$selected")
@@ -68,13 +71,12 @@ aur_install() {
     fi
 
     if [ ${#aur_pkgs[@]} -gt 0 ]; then
-        echo AUR packages: "${aur_pkgs[@]}"
-
         printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat $PKGS_DIR/{1}/PKGBUILD" \
-            --header $'PKGBUILDs\nEnter: Accept all\nEscape: Cancel'
+            --header $'PKGBUILDs\nEnter: Accept all\nEscape: Cancel' >/dev/null
 
         for pkg in "${aur_pkgs[@]}"; do
             cd "$PKGS_DIR/$pkg"
+            echo -e "\n${bold}Installing ${pkg}...\n$reset"
 
             # TODO: Add flag validation
             makepkg "$@"
@@ -100,8 +102,11 @@ function aur_update {
     echo "Checking for AUR updates..."
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
+        if [ ! "$(grep "^$pkg$" "$CACHE_DIR/packages.txt")" ]; then
+            echo "${yellow}Skipping unknown package: $pkg $reset"
+            continue
+        fi
         update_repo "$pkg"
-        # https://unix.stackexchange.com/a/327811
         installed_version=$(pacman -Qi "$pkg" | awk '/^Version/{print $3}')
         new_version=$(awk '/^\s*pkgver/{ver=$3} /^\s*pkgrel/{print ver "-" $3}' .SRCINFO)
         if [ "$(grep epoch .SRCINFO)" ]; then
@@ -147,11 +152,11 @@ case $1 in
         ;;
     *)
         echo -e 'Usage: fzur [options]\n'
-        echo -e "-i, --install\tSelect and install packages with fzf (default)"
-        echo -e "-u, --update\tSelect and update packages with fzf"
-        echo -e "-r, --remove\tSelect and remove pacakges and their dependencies with fzf"
+        echo -e "-c, --clean\tClear the fzur cache including all PKGBUILD repositories"
+        echo -e "-i, --install\tInstall packages with fzf (default)"
+        echo -e "-r, --remove\tRemove pacakges and their dependencies with fzf (pacman -Rns)"
         echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"
-        echo -e "-c, --clean.\tClear the cache including all PKGBUILD repositories\n"
+        echo -e "-u, --update\tRun pacman -Syu and select AUR updates with fzf\n"
         echo "makepkg flags may be passed when using --install or --update"
         ;;
 esac
