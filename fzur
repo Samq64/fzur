@@ -36,7 +36,7 @@ download_aur_list() {
 
 get_dependencies() {
     update_repo "$1"
-    for dep in $(grep -Po '^\s*(make)?depends\s*=\s*\K[\w\-\.]+' .SRCINFO); do
+    for dep in $(grep -Po '^\s*(make)?depends = \K[\w\-\.]+' .SRCINFO); do
         [ "$(pacman -Qqs "^$dep$")" ] && continue
         if [ "$(pacman -Ssq "^$dep$")" ]; then
             pacman_deps+=("$dep")
@@ -99,10 +99,10 @@ function aur_update {
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
         update_repo "$pkg"
         # https://unix.stackexchange.com/a/327811
-        installed_version=$(pacman -Qi "$pkg" | grep -Po '^Version\s*: \K.+')
-        new_version=$(grep -Po 'pkgver\s*=\s*\K.+' .SRCINFO)-$(grep -Po 'pkgrel\s*=\s*\K.+' .SRCINFO)
+        installed_version=$(pacman -Qi "$pkg" | awk '/^Version/{print $3}')
+        new_version=$(awk '/^\s*pkgver/{ver=$3} /^\s*pkgrel/{print ver "-" $3}' .SRCINFO)
         if [ "$(grep epoch .SRCINFO)" ]; then
-            new_version="$(grep -Po 'epoch\s*=\s*\K.+' .SRCINFO):$new_version"
+            new_version="$(awk '/^\s*epoch/{print $3}' .SRCINFO):$new_version"
         fi
         if [ "$(vercmp "$installed_version" "$new_version")" -lt 0 ]; then
             updates+=("$pkg ($installed_version => $new_version)")
