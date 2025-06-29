@@ -56,7 +56,7 @@ aur_install() {
     aur_pkgs=()
     pacman_pkgs=()
 
-    echo -e "${bold}Selected:${reset} $1\n"
+    echo -e "${bold}Selected:${reset} $1"
     for selected in $1; do
         if [ "$(pacman -Ssq "^$selected$")" ]; then
             pacman_pkgs+=("$selected")
@@ -125,13 +125,27 @@ function aur_update {
         --header 'AUR packages to update' --bind 'load:select-all' | xargs)" "$@"
 }
 
+clean() {
+    orphans=$(pacman -Qdtq)
+    [ -v orphans ] && sudo pacman -Rns $orphans
+
+    pkgs=$(pacman -Qqm)
+    for dir in $PKGS_DIR/*; do
+        base="$(basename "$dir")"
+        if [ ! "$(echo "$pkgs" | grep "^$base$")" ]; then
+            echo "Removing PKGBUILD directory for $base"
+            rm -rf "$dir"
+        fi
+    done
+}
+
 [ $# -eq 0 ] && set -- -i
 
 # https://linuxize.com/post/bash-case-statement/
 case $1 in
     '-c' | '--clean')
-        # TODO: Keep repos for installed packages by default
-        rm -rf "$CACHE_DIR";;
+        clean
+        ;;
     '-i' | '--install')
         shift
         aur_select "$@"
@@ -152,7 +166,7 @@ case $1 in
         ;;
     *)
         echo -e 'Usage: fzur [options]\n'
-        echo -e "-c, --clean\tClear the fzur cache including all PKGBUILD repositories"
+        echo -e "-c, --clean\tRemove unused installed packages and PKGBUILD repositories"
         echo -e "-i, --install\tInstall packages with fzf (default)"
         echo -e "-r, --remove\tRemove pacakges and their dependencies with fzf (pacman -Rns)"
         echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"

@@ -27,11 +27,11 @@ After that `fzur` and `fzf-info` can simply be copied to `/usr/local/bin` or som
 By default fzur will open the installation menu and download the list of all AUR packages if it does not already exist.
 
 ```
--c, --clean\tClear the fzur cache including all PKGBUILD repositories
--i, --install\tInstall packages with fzf (default)
--r, --remove\tRemove pacakges and their dependencies with fzf (pacman -Rns)
--s, --sync\tRe-download the AUR package list and clear the info cache
--u, --update\tRun pacman -Syu and select AUR updates with fzf
+-c, --clean     Remove unused installed packages and PKGBUILD repositories
+-i, --install   Install packages with fzf (default)
+-r, --remove    Remove pacakges and their dependencies with fzf (pacman -Rns)
+-s, --sync      Re-download the AUR package list and clear the info cache
+-u, --update    Run pacman -Syu and select AUR updates with fzf
 ```
 
 When using `--install` or `--update` additional flags may be passed to [makepkg](https://wiki.archlinux.org/title/Makepkg).
