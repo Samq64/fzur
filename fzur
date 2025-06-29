@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Requirements: aur-info.sh (needs jq), base-devel, curl, fzf, git
+# Requirements: fzur-info (needs jq), base-devel, curl, fzf, git
 
 set -euo pipefail
 shopt -s expand_aliases
 
 CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
 PKGS_DIR="$CACHE_DIR/pkgbuild"
-SCRIPT_DIR=$(pwd)
 
 bold=$(tput bold)
 reset=$(tput sgr0)
@@ -91,7 +90,7 @@ aur_install() {
 aur_select() {
     [ -f "$CACHE_DIR/packages.txt" ] || download_aur_list
     pkgs=$(pacman -Ssq | cat - "$CACHE_DIR/packages.txt" | fzf -m --header 'AUR packages to install' \
-        --preview "$SCRIPT_DIR/aur-info.sh {}" | xargs)
+        --preview 'fzur-info {1}' | xargs)
     aur_install "$pkgs" "$@"
 }
 
