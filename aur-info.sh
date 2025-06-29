@@ -2,8 +2,8 @@
 # Requirements: curl, jq
 
 set -euo pipefail
+COLUMNS=${FZF_PREVIEW_COLUMNS:-$(tput cols)}
 dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur/info
-cols=${FZF_PREVIEW_COLUMNS:-$(tput cols)}
 bold=$(tput bold)
 red=$(tput setaf 1)
 reset=$(tput sgr0)
@@ -11,6 +11,8 @@ reset=$(tput sgr0)
 if [ $# -ne 1 ]; then
     echo "Usage: $0 package-name" && exit 1
 fi
+
+pacman -Si --color=always "$1" 2>/dev/null && exit
 
 mkdir -p "$dir"
 cd "$dir"
@@ -20,7 +22,7 @@ if [ "$(find "$1.json" -mtime -1 2>/dev/null)" ]; then
 else
     # Download the package info and flatten the arrays into comma separeated strings
     info=$(curl -s "https://aur.archlinux.org/rpc/v5/info?arg=$1" \
-        | jq -c '.["results"][0] | (.. | arrays) |= join(", ")')
+        | jq -c '.["results"][0] | (.. | arrays) |= join("  ")')
 
     if [ "$info" = null ]; then
         echo "${red}Failed to fetch package information for $1.$reset"
@@ -47,8 +49,7 @@ fi
 
 # https://stackoverflow.com/a/58893261
 # TODO: Wrap words instead of characters
-cat <<EOF | column -t -s '|' -c "$cols" \
-    --table-columns C1,C2 --table-noheadings --table-wrap C2
+cat <<EOF | column -t -s '|' --table-columns C1,C2 --table-noheadings --table-wrap C2
 ${bold}Repository${reset}|: AUR
 ${bold}Package Base${reset}|: $(get PackageBase)
 ${bold}Version${reset}|: $version_label

@@ -39,9 +39,9 @@ get_dependencies() {
     for dep in $(grep -Po '^\s*(make)?depends = \K[\w\-\.]+' .SRCINFO); do
         [ "$(pacman -Qqs "^$dep$")" ] && continue
         if [ "$(pacman -Ssq "^$dep$")" ]; then
-            pacman_deps+=("$dep")
+            pacman_pkgs+=("$dep")
         else
-            aur_deps+=("$dep")
+            aur_pkgs+=("$dep")
             get_dependencies "$dep"
         fi
     done
@@ -51,48 +51,52 @@ aur_install() {
     if [ ! "$1" ]; then
         echo "aur_install: No packages provided." && exit 1
     fi
-    aur_deps=()
-    pacman_deps=()
+    aur_pkgs=()
+    pacman_pkgs=()
 
     echo "Selected: $1"
     for selected in $1; do
-        get_dependencies "$selected"
+        if [ "$(pacman -Ssq "^$selected$")" ]; then
+            pacman_pkgs+=("$selected")
+        else
+            aur_pkgs+=("$selected")
+            get_dependencies "$selected"
+        fi
     done
 
-    [ ${#aur_deps[@]} -gt 0 ] && echo AUR dependencies: "${aur_deps[@]}"
-
-    if [ ${#pacman_deps[@]} -gt 0 ]; then
-        echo Pacman dependencies: "${pacman_deps[@]}"
-        sudo pacman -S --asdeps --needed "${pacman_deps[@]}"
+    if [ ${#pacman_pkgs[@]} -gt 0 ]; then
+        sudo pacman -S --asdeps --needed "${pacman_pkgs[@]}"
     fi
 
-    # Should be word split
-    aur_pkgs=(${aur_deps[@]} $1)
+    if [ ${#aur_pkgs[@]} -gt 0 ]; then
+        echo AUR packages: "${aur_pkgs[@]}"
 
-    printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat $PKGS_DIR/{1}/PKGBUILD" \
-        --header $'PKGBUILDs\nEnter: Accept all\nEscape: Cancel'
+        printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat $PKGS_DIR/{1}/PKGBUILD" \
+            --header $'PKGBUILDs\nEnter: Accept all\nEscape: Cancel'
 
-    for pkg in "${aur_pkgs[@]}"; do
-        cd "$PKGS_DIR/$pkg"
+        for pkg in "${aur_pkgs[@]}"; do
+            cd "$PKGS_DIR/$pkg"
 
-        # TODO: Add flag validation
-        makepkg "$@"
-        built_pkgs+="$(makepkg --packagelist | grep -v '\-debug.*-any.pkg.tar.zst') "
-    done
+            # TODO: Add flag validation
+            makepkg "$@"
+            built_pkgs+="$(makepkg --packagelist | grep -v '\-debug.*-any.pkg.tar.zst') "
+        done
 
-    # Should be word split
-    sudo pacman -U --asdeps $(echo "$built_pkgs" | xargs)
+        # Should be word split
+        sudo pacman -U --asdeps $(echo "$built_pkgs" | xargs)
+    fi
     sudo pacman -Dq --asexplicit $1
 }
 
 aur_select() {
     [ -f "$CACHE_DIR/packages.txt" ] || download_aur_list
-    pkgs=$(fzf -m --header 'AUR packages to install' \
-    --preview "$SCRIPT_DIR/aur-info.sh {}" < "$CACHE_DIR/packages.txt" | xargs)
+    pkgs=$(pacman -Ssq | cat - "$CACHE_DIR/packages.txt" | fzf -m --header 'AUR packages to install' \
+        --preview "$SCRIPT_DIR/aur-info.sh {}" | xargs)
     aur_install "$pkgs" "$@"
 }
 
 function aur_update {
+    sudo pacman -Syu
     updates=()
     echo "Checking for AUR updates..."
 
@@ -128,6 +132,12 @@ case $1 in
         shift
         aur_select "$@"
         ;;
+    '-r' | '--remove')
+        pkgs=($(pacman -Qeq | fzf -m --preview 'pacman -Qi {1}'))
+        [ "${#pkgs[@]}" -gt 0 ] || exit
+        echo Selected for removal: "${pkgs[@]}"
+        sudo pacman -Rns "${pkgs[@]}"
+        ;;
     '-s' | '--sync')
         rm -rf "$CACHE_DIR/info"
         download_aur_list
@@ -138,8 +148,9 @@ case $1 in
         ;;
     *)
         echo -e 'Usage: fzur [options]\n'
-        echo -e "-i, --install\tSelect and install AUR packages with fzf (default)"
-        echo -e "-u, --update\tSelect and update AUR packages with fzf"
+        echo -e "-i, --install\tSelect and install packages with fzf (default)"
+        echo -e "-u, --update\tSelect and update packages with fzf"
+        echo -e "-r, --remove\tSelect and remove pacakges and their dependencies with fzf"
         echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"
         echo -e "-c, --clean.\tClear the cache including all PKGBUILD repositories\n"
         echo "makepkg flags may be passed when using --install or --update"
