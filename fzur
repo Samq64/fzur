@@ -129,8 +129,11 @@ function aur_update {
 }
 
 clean() {
-    orphans=$(pacman -Qdtq)
-    [ -v orphans ] && sudo pacman -Rns $orphans
+    orphans=$(pacman -Qdtq || echo none)
+    [ "$orphans" != none ] && sudo pacman -Rns $orphans
+
+    rm -f "$CACHE_DIR/packages.txt"
+    rm -rf "$CACHE_DIR/info"
 
     pkgs=$(pacman -Qqm)
     for dir in $PKGS_DIR/*; do
@@ -169,7 +172,7 @@ case $1 in
         ;;
     *)
         echo -e 'Usage: fzur [options]\n'
-        echo -e "-c, --clean\tRemove unused installed packages and PKGBUILD repositories"
+        echo -e "-c, --clean\tRemove orhpaned packages and clear the fzur cache (except used repositories)"
         echo -e "-i, --install\tInstall packages with fzf (default)"
         echo -e "-r, --remove\tRemove pacakges and their dependencies with fzf (pacman -Rns)"
         echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"
