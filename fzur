@@ -44,8 +44,12 @@ get_dependencies() {
         if [ "$(pacman -Ssq "^$dep$")" ]; then
             pacman_pkgs+=("$dep")
         else
-            aur_pkgs+=("$dep")
-            get_dependencies "$dep"
+            # https://stackoverflow.com/a/47541882
+            # Check if pakcage already exists in array
+            if [ ! "$(printf '%s\n' "${aur_pkgs[@]}" | grep -Fx -- "$dep")" ]; then
+                aur_pkgs+=("$dep")
+                get_dependencies "$dep"
+            fi
         fi
     done
 }
