@@ -4,6 +4,7 @@
 set -euo pipefail
 shopt -s expand_aliases
 
+PATH="$(pwd):$PATH"
 CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
 PKGS_DIR="$CACHE_DIR/pkgbuild"
 
@@ -71,14 +72,13 @@ aur_install() {
     fi
 
     if [ ${#aur_pkgs[@]} -gt 0 ]; then
-        printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat $PKGS_DIR/{1}/PKGBUILD" \
+        printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat -n $PKGS_DIR/{1}/PKGBUILD" \
             --header $'PKGBUILDs\nEnter: Accept all\nEscape: Cancel' >/dev/null
 
         for pkg in "${aur_pkgs[@]}"; do
             cd "$PKGS_DIR/$pkg"
             echo -e "\n${bold}Installing ${pkg}...\n$reset"
 
-            # TODO: Add flag validation
             makepkg "$@"
             built_pkgs+="$(makepkg --packagelist | grep -v '\-debug.*-any.pkg.tar.zst') "
         done
@@ -97,7 +97,10 @@ aur_select() {
 }
 
 function aur_update {
-    sudo pacman -Syu
+    printf 'Update all non-AUR packages? (y/n): '
+    read -r answer
+    [ "${answer,,}" = y ] && sudo pacman -Syu
+
     updates=()
     echo "Checking for AUR updates..."
 
