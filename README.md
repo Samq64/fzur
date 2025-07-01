@@ -2,15 +2,16 @@
 
 This is Fzur, which stands for **fz**f A**UR**. It is a couple of bash scripts made to simplify the process of searching for, installing and updating packages from the [Arch User Repository](https://aur.archlinux.org), which is a large collection of build scripts often referred to as [PKGBUILDs](https://wiki.archlinux.org/title/PKGBUILD) for Arch Linux. It uses the [fzf](https://github.com/junegunn/fzf) fuzzy finder tool for interactively selecting packages and previewing information about them. It is not dependant on other AUR tools.
 
-## Requirements
+## Installation
 
-Assuming `sudo` is already installed, the dependencies can be installed on Arch Linux with:
+Fzur is available on the AUR as `fzur-git`, which can installed with:
 
 ```sh
-sudo pacman -S --needed base-devel curl fzf git jq
+sudo pacman -S --needed base-devel git
+git clone https://aur.archlinux.org/fzur-git.git
+cd fzur-git
+makepkg -si
 ```
-
-After that, `fzur` and `fzf-info` can simply be copied to `/usr/local/bin` or somewhere else in the `$PATH` environment variable until this tool is itself submitted as an AUR package.
 
 ## Usage of Fzur
 
