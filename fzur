@@ -24,7 +24,7 @@ update_repo() {
         cd "$1"
         git pull --quiet
     else
-        echo Cloning "$1"...
+        echo Cloning "$1" from the AUR...
         git clone -q "https://aur.archlinux.org/$1"
         cd "$1"
     fi
@@ -106,7 +106,7 @@ function aur_update {
     [ "${answer,,}" = y ] && sudo pacman -Syu
 
     updates=()
-    echo "Checking for AUR updates..."
+    echo "${bold}Checking for AUR updates...${reset}"
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
         if [ ! "$(grep "^$pkg$" "$CACHE_DIR/packages.txt")" ]; then
@@ -125,11 +125,12 @@ function aur_update {
     done
 
     if [ "${#updates[@]}" -eq 0 ]; then
-        echo "Up to date" && exit
+        echo "All AUR packages are up to date." && exit
     fi
 
-    aur_install "$(printf "%s\n" "${updates[@]}" | fzf --accept-nth 1 -m \
-        --header 'AUR packages to update' --bind 'load:select-all' | xargs)" "$@"
+    selected=$(printf "%s\n" "${updates[@]}" | fzf --accept-nth 1 -m \
+        --header 'AUR packages to update' --bind 'load:select-all' | xargs)
+    aur_install "$selected" "$@"
 }
 
 clean() {
