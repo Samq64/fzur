@@ -2,17 +2,16 @@
 # Requirements: fzur-info (needs jq), base-devel, curl, fzf, git
 
 set -euo pipefail
-shopt -s expand_aliases
 
 PATH="$(pwd):$PATH"
 CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
 PKGS_DIR="$CACHE_DIR/pkgbuild"
 
+fzf_opts=(--reverse --header-first --preview-window '75%,wrap')
 bold=$(tput bold)
 red=$(tput setaf 1)
 yellow=$(tput setaf 3)
 reset=$(tput sgr0)
-alias fzf="fzf --reverse --header-first --preview-window 75%,wrap"
 
 update_repo() {
     if [ $# -lt 1 ]; then
@@ -76,7 +75,7 @@ aur_install() {
     fi
 
     if [ ${#aur_pkgs[@]} -gt 0 ]; then
-        printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat -n $PKGS_DIR/{1}/PKGBUILD" \
+        printf "%s\n" "${aur_pkgs[@]}" | fzf "${fzf_opts[@]}" --preview "cat -n $PKGS_DIR/{1}/PKGBUILD" \
             --header $'PKGBUILDs\nEnter: Accept all\nEscape: Cancel' >/dev/null
 
         for pkg in "${aur_pkgs[@]}"; do
@@ -95,8 +94,8 @@ aur_install() {
 
 aur_select() {
     [ -f "$CACHE_DIR/packages.txt" ] || download_aur_list
-    pkgs=$(pacman -Ssq | cat - "$CACHE_DIR/packages.txt" | fzf -m --header 'AUR packages to install' \
-        --preview 'fzur-info {1}' | xargs)
+    pkgs=$(pacman -Ssq | cat - "$CACHE_DIR/packages.txt" | fzf "${fzf_opts[@]}" \
+        -m --header 'AUR packages to install' --preview 'fzur-info {1}' | xargs)
     aur_install "$pkgs" "$@"
 }
 
@@ -128,7 +127,7 @@ function aur_update {
         echo "All AUR packages are up to date." && exit
     fi
 
-    selected=$(printf "%s\n" "${updates[@]}" | fzf --accept-nth 1 -m \
+    selected=$(printf "%s\n" "${updates[@]}" | fzf "${fzf_opts[@]}" --accept-nth 1 -m \
         --header 'AUR packages to update' --bind 'load:select-all' | xargs)
     aur_install "$selected" "$@"
 }
@@ -162,7 +161,7 @@ case $1 in
         aur_select "$@"
         ;;
     '-r' | '--remove')
-        pkgs=($(pacman -Qeq | fzf -m --preview 'pacman -Qi {1}'))
+        pkgs=($(pacman -Qeq | fzf "${fzf_opts[@]}" -m --preview 'pacman -Qi {1}'))
         [ "${#pkgs[@]}" -gt 0 ] || exit
         echo Selected for removal: "${pkgs[@]}"
         sudo pacman -Rns "${pkgs[@]}"
