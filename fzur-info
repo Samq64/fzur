@@ -70,6 +70,11 @@ fi
 mkdir -p "$dir"
 cd "$dir"
 
+if [ ! -f ../packages.txt ]; then
+    echo "AUR package list not found. Run fzur -s to download it."
+    exit 1
+fi
+
 if [ "$(grep "^$1$" ../packages.txt)" ]; then
     aur "$1"
 else

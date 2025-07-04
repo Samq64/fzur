@@ -106,6 +106,7 @@ function aur_update {
 
     updates=()
     echo "${bold}Checking for AUR updates...${reset}"
+    [ -f "$CACHE_DIR/packages.txt" ] || download_aur_list
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
         if [ ! "$(grep "^$pkg$" "$CACHE_DIR/packages.txt")" ]; then
