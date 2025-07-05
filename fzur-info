@@ -1,26 +1,28 @@
 #!/usr/bin/env bash
+# Prints information about an AUR or offical Arch package.
 # Requirements: curl, jq
 
 set -euo pipefail
 COLUMNS=${FZF_PREVIEW_COLUMNS:-$(tput cols)}
-dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur/info
+cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
 bold=$(tput bold)
 red=$(tput setaf 1)
 reset=$(tput sgr0)
+pkg=$1
 
 aur() {
-    if [ "$(find "$1.json" -mtime -1 2>/dev/null)" ]; then
-        info=$(cat "$1.json")
+    if [ "$(find "${pkg}.json" -mtime -1 2>/dev/null)" ]; then
+        info=$(cat "${pkg}.json")
     else
         # Download the package info and flatten the arrays into comma separeated strings
-        info=$(curl -s "https://aur.archlinux.org/rpc/v5/info?arg=$1" |
+        info=$(curl -s "https://aur.archlinux.org/rpc/v5/info?arg=$pkg" |
             jq -c '.["results"][0] | (.. | arrays) |= join("  ")')
 
         if [ "$info" = null ]; then
-            echo "${red}Failed to fetch package information for $1.$reset"
+            echo "${red}Failed to fetch package information for ${pkg}.${reset}"
             exit 1
         fi
-        echo "$info" >"$1.json"
+        echo "$info" >"${pkg}.json"
     fi
 
     get() {
@@ -62,21 +64,21 @@ ${bold}Last Modified${reset}|: $(date -d @"$(get LastModified)")
 EOF
 }
 
-if [[ $# != 1 || $1 == -* ]]; then
-    echo 'Prints AUR or repository package information'
+if [[ $# != 1 || $pkg == -* ]]; then
+    echo 'Prints AUR or Arch repository package information'
     echo "Usage: $0 package-name" && exit 1
 fi
 
-mkdir -p "$dir"
-cd "$dir"
+mkdir -p "$cache_dir/info"
+cd "$cache_dir/info"
 
-if [ ! -f ../packages.txt ]; then
+if [ ! -f "$cache_dir/packages.txt" ]; then
     echo "AUR package list not found. Run fzur -s to download it."
     exit 1
 fi
 
-if [ "$(grep "^$1$" ../packages.txt)" ]; then
-    aur "$1"
+if grep -q "^$pkg$" "$cache_dir/packages.txt"; then
+    aur
 else
-    pacman -Si --color=always "$1"
+    pacman -Si --color=always "$pkg"
 fi

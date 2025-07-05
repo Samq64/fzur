@@ -1,51 +1,52 @@
 #!/usr/bin/env bash
+# fzur: An fzf AUR helper
 # Requirements: fzur-info (needs jq), base-devel, curl, fzf, git
 
 set -euo pipefail
 
-PATH="$(pwd):$PATH"
-CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
-PKGS_DIR="$CACHE_DIR/pkgbuild"
-
+cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
+pkgs_dir="$cache_dir/pkgbuild"
+script_dir=$(realpath "$(dirname "$0")")
 fzf_opts=(--reverse --header-first --preview-window '75%,wrap')
+
 bold=$(tput bold)
-red=$(tput setaf 1)
 yellow=$(tput setaf 3)
 reset=$(tput sgr0)
 
-update_repo() {
-    if [ $# -lt 1 ]; then
-        echo "${red}update_repo: No package name provided.$reset" && exit 1
-    fi
-    mkdir -p "$PKGS_DIR"
-    cd "$PKGS_DIR"
-    if [ -d "$1" ]; then
-        cd "$1"
-        git pull --quiet
-    else
-        echo Cloning "$1" from the AUR...
-        git clone -q "https://aur.archlinux.org/$1"
-        cd "$1"
-    fi
+download_aur_list() {
+    mkdir -p "$cache_dir"
+    cd "$cache_dir"
+    echo -e "${bold}Downloading AUR package list...\n${reset}"
+    curl https://aur.archlinux.org/packages.gz | gzip -d >packages.txt
 }
 
-download_aur_list() {
-    mkdir -p "$CACHE_DIR"
-    cd "$CACHE_DIR"
-    echo -e "${bold}Downloading AUR package list...\n${reset}"
-    curl https://aur.archlinux.org/packages.gz | gzip -d > packages.txt
+update_repo() {
+    local pkg=$1
+    mkdir -p "$pkgs_dir"
+    cd "$pkgs_dir"
+    if [ -d "$pkg" ]; then
+        cd "$pkg" && git pull --quiet
+    else
+        echo Cloning "$pkg" from the AUR...
+        git clone --quiet "https://aur.archlinux.org/$pkg"
+        cd "$pkg"
+    fi
 }
 
 get_dependencies() {
     update_repo "$1"
-    for dep in $(grep -Po '^\s*(make)?depends = \K[\w\-\.]+' .SRCINFO); do
+
+    local dep deps
+    deps=$(grep -Po '^\s*(make)?depends = \K[\w\-\.]+' .SRCINFO) || true
+
+    for dep in $deps; do
         [ "$(pacman -Qqs "^$dep$")" ] && continue
         if [ "$(pacman -Ssq "^$dep$")" ]; then
             pacman_pkgs+=("$dep")
         else
             # https://stackoverflow.com/a/47541882
             # Check if pakcage already exists in array
-            if [ ! "$(printf '%s\n' "${aur_pkgs[@]}" | grep -Fx -- "$dep")" ]; then
+            if ! printf '%s\n' "${aur_pkgs[@]}" | grep -Fxq -- "$dep"; then
                 aur_pkgs+=("$dep")
                 get_dependencies "$dep"
             fi
@@ -53,20 +54,20 @@ get_dependencies() {
     done
 }
 
-aur_install() {
-    if [ ! "$1" ]; then
-        echo "${red}aur_install: No packages provided.$red" && exit 1
-    fi
-    aur_pkgs=()
-    pacman_pkgs=()
+install_pkgs() {
+    local targets=$1
+    local aur_pkgs=()
+    local pacman_pkgs=()
+    local built_pkgs=()
+    local pkg
 
-    echo -e "${bold}Selected:${reset} $1"
-    for selected in $1; do
-        if [ "$(pacman -Ssq "^$selected$")" ]; then
-            pacman_pkgs+=("$selected")
+    echo "${bold}Selected:${reset} $targets"
+    for pkg in $targets; do
+        if pacman -Ssq "^$pkg$"; then
+            pacman_pkgs+=("$pkg")
         else
-            aur_pkgs+=("$selected")
-            get_dependencies "$selected"
+            aur_pkgs+=("$pkg")
+            get_dependencies "$pkg"
         fi
     done
 
@@ -75,113 +76,131 @@ aur_install() {
     fi
 
     if [ ${#aur_pkgs[@]} -gt 0 ]; then
-        printf "%s\n" "${aur_pkgs[@]}" | fzf "${fzf_opts[@]}" --preview "cat -n $PKGS_DIR/{1}/PKGBUILD" \
+        printf "%s\n" "${aur_pkgs[@]}" | fzf "${fzf_opts[@]}" --preview "cat -n $pkgs_dir/{1}/PKGBUILD" \
             --header $'PKGBUILDs\nEnter: Accept all\nEscape: Cancel' >/dev/null
 
         for pkg in "${aur_pkgs[@]}"; do
-            cd "$PKGS_DIR/$pkg"
-            echo -e "\n${bold}Installing ${pkg}...\n$reset"
-
+            cd "$pkgs_dir/$pkg"
+            echo -e "\n${bold}Installing ${pkg}...\n${reset}"
             makepkg "$@"
-            built_pkgs+="$(makepkg --packagelist | grep -v '\-debug.*-any.pkg.tar.zst') "
+            local tmp
+            mapfile -t tmp < <(makepkg --packagelist | grep -v '\-debug.*-any.pkg.tar.zst')
+            built_pkgs+=("${tmp[@]}")
         done
-
-        # Should be word split
-        sudo pacman -U --asdeps $(echo "$built_pkgs" | xargs)
+        sudo pacman -U --asdeps "${built_pkgs[@]}"
     fi
-    sudo pacman -Dq --asexplicit $1
+    sudo pacman -Dq --asexplicit $targets
 }
 
-aur_select() {
-    [ -f "$CACHE_DIR/packages.txt" ] || download_aur_list
-    pkgs=$(pacman -Ssq | cat - "$CACHE_DIR/packages.txt" | fzf "${fzf_opts[@]}" \
-        -m --header 'AUR packages to install' --preview 'fzur-info {1}' | xargs)
-    aur_install "$pkgs" "$@"
+select_pkgs() {
+    [ -f "$cache_dir/packages.txt" ] || download_aur_list
+
+    pkgs=$(pacman -Ssq |
+        cat - "$cache_dir/packages.txt" |
+        fzf "${fzf_opts[@]}" -m --header 'AUR packages to install' --preview "$script_dir/fzur-info {1}" |
+        xargs)
+
+    install_pkgs "$pkgs" "$@"
 }
 
-function aur_update {
+update_pkgs() {
     printf 'Update all non-AUR packages? (y/n): '
     read -r answer
     [ "${answer,,}" = y ] && sudo pacman -Syu
 
-    updates=()
+    local updates=()
+    local pkg
     echo "${bold}Checking for AUR updates...${reset}"
-    [ -f "$CACHE_DIR/packages.txt" ] || download_aur_list
+    [ -f "$cache_dir/packages.txt" ] || download_aur_list
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
-        if [ ! "$(grep "^$pkg$" "$CACHE_DIR/packages.txt")" ]; then
-            echo "${yellow}Skipping unknown package: $pkg $reset"
+        if ! grep -q "^$pkg$" "$cache_dir/packages.txt"; then
+            echo "${yellow}Skipping unknown package: ${pkg}${reset}"
             continue
         fi
         update_repo "$pkg"
-        installed_version=$(pacman -Qi "$pkg" | awk '/^Version/{print $3}')
-        new_version=$(awk '/^\s*pkgver/{ver=$3} /^\s*pkgrel/{print ver "-" $3}' .SRCINFO)
-        if [ "$(grep epoch .SRCINFO)" ]; then
-            new_version="$(awk '/^\s*epoch/{print $3}' .SRCINFO):$new_version"
+        local installed new
+        installed=$(pacman -Qi "$pkg" | awk '/^Version/{print $3}')
+        new=$(awk '/^\s*pkgver/{ver=$3} /^\s*pkgrel/{print ver "-" $3}' .SRCINFO)
+        if grep -q epoch .SRCINFO; then
+            new="$(awk '/^\s*epoch/{print $3}' .SRCINFO):$new"
         fi
-        if [ "$(vercmp "$installed_version" "$new_version")" -lt 0 ]; then
-            updates+=("$pkg ($installed_version => $new_version)")
+        if [ "$(vercmp "$installed" "$new")" -lt 0 ]; then
+            updates+=("$pkg ($installed => $new)")
         fi
     done
 
     if [ "${#updates[@]}" -eq 0 ]; then
-        echo "All AUR packages are up to date." && exit
+        echo "All AUR packages are up to date." && return
     fi
 
+    local selected
     selected=$(printf "%s\n" "${updates[@]}" | fzf "${fzf_opts[@]}" --accept-nth 1 -m \
         --header 'AUR packages to update' --bind 'load:select-all' | xargs)
-    aur_install "$selected" "$@"
+    install_pkgs "$selected" "$@"
+}
+
+remove() {
+    local pkgs
+    IFS=" " read -ra pkgs <<<"$(pacman -Qeq | fzf "${fzf_opts[@]}" -m --preview 'pacman -Qi {1}')"
+    [ "${#pkgs[@]}" -eq 0 ] && return
+    echo Selected for removal: "${pkgs[@]}"
+    sudo pacman -Rns "${pkgs[@]}"
 }
 
 clean() {
-    orphans=$(pacman -Qdtq || echo none)
-    [ "$orphans" != none ] && sudo pacman -Rns $orphans
+    local orphans
+    orphans=$(pacman -Qdtq || echo '')
+    [ -n "$orphans" ] && sudo pacman -Rns $orphans
 
-    rm -f "$CACHE_DIR/packages.txt"
-    rm -rf "$CACHE_DIR/info"
+    rm -f "$cache_dir/packages.txt"
+    rm -rf "$cache_dir/info"
 
+    local pkgs
     pkgs=$(pacman -Qqm)
-    for dir in $PKGS_DIR/*; do
-        base="$(basename "$dir")"
-        if [ ! "$(echo "$pkgs" | grep "^$base$")" ]; then
-            echo "Removing PKGBUILD directory for $base"
+    for dir in "$pkgs_dir"/*; do
+        local name
+        name="$(basename "$dir")"
+        if ! echo "$pkgs" | grep "^$name$"; then
+            echo "Removing PKGBUILD directory for $name"
             rm -rf "$dir"
         fi
     done
+}
+
+show_help() {
+    echo -e 'Usage: fzur [options]\n'
+    echo -e "-c, --clean\tRemove orhpaned packages and clear the fzur cache (except used repositories)"
+    echo -e "-i, --install\tInstall packages with fzf (default)"
+    echo -e "-r, --remove\tRemove pacakges and their dependencies with fzf (pacman -Rns)"
+    echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"
+    echo -e "-u, --update\tRun pacman -Syu and select AUR updates with fzf\n"
+    echo "makepkg flags may be passed when using --install or --update"
 }
 
 [ $# -eq 0 ] && set -- -i
 
 # https://linuxize.com/post/bash-case-statement/
 case $1 in
-    '-c' | '--clean')
-        clean
-        ;;
-    '-i' | '--install')
-        shift
-        aur_select "$@"
-        ;;
-    '-r' | '--remove')
-        pkgs=($(pacman -Qeq | fzf "${fzf_opts[@]}" -m --preview 'pacman -Qi {1}'))
-        [ "${#pkgs[@]}" -gt 0 ] || exit
-        echo Selected for removal: "${pkgs[@]}"
-        sudo pacman -Rns "${pkgs[@]}"
-        ;;
-    '-s' | '--sync')
-        rm -rf "$CACHE_DIR/info"
-        download_aur_list
-        ;;
-    '-u' | '--update')
-        shift
-        aur_update "$@"
-        ;;
-    *)
-        echo -e 'Usage: fzur [options]\n'
-        echo -e "-c, --clean\tRemove orhpaned packages and clear the fzur cache (except used repositories)"
-        echo -e "-i, --install\tInstall packages with fzf (default)"
-        echo -e "-r, --remove\tRemove pacakges and their dependencies with fzf (pacman -Rns)"
-        echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"
-        echo -e "-u, --update\tRun pacman -Syu and select AUR updates with fzf\n"
-        echo "makepkg flags may be passed when using --install or --update"
-        ;;
+'-c' | '--clean')
+    clean
+    ;;
+'-i' | '--install')
+    shift
+    select_pkgs "$@"
+    ;;
+'-r' | '--remove')
+    remove
+    ;;
+'-s' | '--sync')
+    rm -rf "$cache_dir/info"
+    download_aur_list
+    ;;
+'-u' | '--update')
+    shift
+    update_pkgs "$@"
+    ;;
+*)
+    show_help
+    ;;
 esac
