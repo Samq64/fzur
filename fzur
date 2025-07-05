@@ -77,7 +77,7 @@ install_pkgs() {
 
     if [ ${#aur_pkgs[@]} -gt 0 ]; then
         printf "%s\n" "${aur_pkgs[@]}" | fzf "${fzf_opts[@]}" --preview "cat -n $pkgs_dir/{1}/PKGBUILD" \
-            --header $'PKGBUILDs\nEnter: Accept all\nEscape: Cancel' >/dev/null
+            --header $'Review PKGBUILDs\nEnter: Accept all\nEscape: Cancel' >/dev/null
 
         for pkg in "${aur_pkgs[@]}"; do
             cd "$pkgs_dir/$pkg"
@@ -97,7 +97,7 @@ select_pkgs() {
 
     pkgs=$(pacman -Ssq |
         cat - "$cache_dir/packages.txt" |
-        fzf "${fzf_opts[@]}" -m --header 'AUR packages to install' --preview "$script_dir/fzur-info {1}" |
+        fzf "${fzf_opts[@]}" -m --header 'Select packages to install' --preview "$script_dir/fzur-info {1}" |
         xargs)
 
     install_pkgs "$pkgs" "$@"
@@ -136,13 +136,15 @@ update_pkgs() {
 
     local selected
     selected=$(printf "%s\n" "${updates[@]}" | fzf "${fzf_opts[@]}" --accept-nth 1 -m \
-        --header 'AUR packages to update' --bind 'load:select-all' | xargs)
+        --header 'Select AUR packages to update' --bind 'load:select-all' | xargs)
     install_pkgs "$selected" "$@"
 }
 
 remove() {
     local pkgs
-    IFS=" " read -ra pkgs <<<"$(pacman -Qeq | fzf "${fzf_opts[@]}" -m --preview 'pacman -Qi {1}')"
+    IFS=" " read -ra pkgs <<<"$(pacman -Qeq |
+        fzf "${fzf_opts[@]}" -m --header 'Select packages to remove' --preview 'pacman -Qi {1}'
+    )"
     [ "${#pkgs[@]}" -eq 0 ] && return
     echo Selected for removal: "${pkgs[@]}"
     sudo pacman -Rns "${pkgs[@]}"
