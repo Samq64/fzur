@@ -4,7 +4,7 @@
 
 set -euo pipefail
 COLUMNS=${FZF_PREVIEW_COLUMNS:-$(tput cols)}
-cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
+CACHE_DIR=${CACHE_DIR:-$HOME/.cache/fzur}
 bold=$(tput bold)
 red=$(tput setaf 1)
 reset=$(tput sgr0)
@@ -69,15 +69,15 @@ if [[ $# != 1 || $pkg == -* ]]; then
     echo "Usage: $0 package-name" && exit 1
 fi
 
-mkdir -p "$cache_dir/info"
-cd "$cache_dir/info"
+mkdir -p "$CACHE_DIR/info"
+cd "$CACHE_DIR/info"
 
-if [ ! -f "$cache_dir/packages.txt" ]; then
+if [ ! -f "$CACHE_DIR/packages.txt" ]; then
     echo "AUR package list not found. Run fzur -s to download it."
     exit 1
 fi
 
-if grep -q "^$pkg$" "$cache_dir/packages.txt"; then
+if grep -q "^$pkg$" "$CACHE_DIR/packages.txt"; then
     aur
 else
     pacman -Si --color=always "$pkg"

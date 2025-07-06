@@ -4,8 +4,8 @@
 
 set -euo pipefail
 
-cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
-pkgs_dir="$cache_dir/pkgbuild"
+export CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
+pkgs_dir="$CACHE_DIR/pkgbuild"
 script_dir=$(realpath "$(dirname "$0")")
 fzf_opts=(--reverse --header-first --preview-window '75%,wrap')
 
@@ -14,8 +14,8 @@ yellow=$(tput setaf 3)
 reset=$(tput sgr0)
 
 download_aur_list() {
-    mkdir -p "$cache_dir"
-    cd "$cache_dir"
+    mkdir -p "$CACHE_DIR"
+    cd "$CACHE_DIR"
     echo -e "${bold}Downloading AUR package list...\n${reset}"
     curl https://aur.archlinux.org/packages.gz | gzip -d >packages.txt
 }
@@ -93,10 +93,10 @@ install_pkgs() {
 }
 
 select_pkgs() {
-    [ -f "$cache_dir/packages.txt" ] || download_aur_list
+    [ -f "$CACHE_DIR/packages.txt" ] || download_aur_list
 
     pkgs=$(pacman -Ssq |
-        cat - "$cache_dir/packages.txt" |
+        cat - "$CACHE_DIR/packages.txt" |
         fzf "${fzf_opts[@]}" -m --header 'Select packages to install' --preview "$script_dir/fzur-info {1}" |
         xargs)
 
@@ -111,10 +111,10 @@ update_pkgs() {
     local updates=()
     local pkg
     echo "${bold}Checking for AUR updates...${reset}"
-    [ -f "$cache_dir/packages.txt" ] || download_aur_list
+    [ -f "$CACHE_DIR/packages.txt" ] || download_aur_list
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
-        if ! grep -q "^$pkg$" "$cache_dir/packages.txt"; then
+        if ! grep -q "^$pkg$" "$CACHE_DIR/packages.txt"; then
             echo "${yellow}Skipping unknown package: ${pkg}${reset}"
             continue
         fi
@@ -155,8 +155,8 @@ clean() {
     orphans=$(pacman -Qdtq || echo '')
     [ -n "$orphans" ] && sudo pacman -Rns $orphans
 
-    rm -f "$cache_dir/packages.txt"
-    rm -rf "$cache_dir/info"
+    rm -f "$CACHE_DIR/packages.txt"
+    rm -rf "$CACHE_DIR/info"
 
     local pkgs
     pkgs=$(pacman -Qqm)
@@ -195,7 +195,7 @@ case $1 in
     remove
     ;;
 '-s' | '--sync')
-    rm -rf "$cache_dir/info"
+    rm -rf "$CACHE_DIR/info"
     download_aur_list
     ;;
 '-u' | '--update')
