@@ -63,7 +63,7 @@ install_pkgs() {
 
     echo "${bold}Selected:${reset} $targets"
     for pkg in $targets; do
-        if pacman -Ssq "^$pkg$"; then
+        if [ "$(pacman -Ssq "^$pkg$")" ]; then
             pacman_pkgs+=("$pkg")
         else
             aur_pkgs+=("$pkg")
