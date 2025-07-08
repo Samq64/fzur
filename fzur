@@ -142,9 +142,9 @@ update_pkgs() {
 
 remove() {
     local pkgs
-    IFS=" " read -ra pkgs <<<"$(pacman -Qeq |
-        fzf -m --header 'Select packages to remove' --preview 'pacman -Qi {1}'
-    )"
+    mapfile -t pkgs < <(
+        pacman -Qeq | fzf -m --header 'Select packages to remove' --preview 'pacman -Qi {1}'
+    )
     [ "${#pkgs[@]}" -eq 0 ] && return
     echo Selected for removal: "${pkgs[@]}"
     sudo pacman -Rns "${pkgs[@]}"
