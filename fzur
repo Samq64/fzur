@@ -180,29 +180,43 @@ show_help() {
     echo "makepkg flags may be passed when using --install or --update"
 }
 
-[ $# -eq 0 ] && set -- -i
+action=select_pkgs
+args=$(getopt -n fzur -o chirsu --long clean,install,help,remove,sync,update -- "$@")
+eval set -- "$args"
 
-# https://linuxize.com/post/bash-case-statement/
-case $1 in
-'-c' | '--clean')
-    clean
-    ;;
-'-i' | '--install')
-    shift
-    select_pkgs "$@"
-    ;;
-'-r' | '--remove')
-    remove
-    ;;
-'-s' | '--sync')
-    rm -rf "$cache_dir/info"
-    download_aur_list
-    ;;
-'-u' | '--update')
-    shift
-    update_pkgs "$@"
-    ;;
-*)
-    show_help
-    ;;
-esac
+while true; do
+    case $1 in
+    -c | --clean)
+        clean
+        exit
+        ;;
+    -h | --help)
+        show_help
+        exit
+        ;;
+    -i | --install)
+        action=select_pkgs
+        shift
+        ;;
+    -r | --remove)
+        action=remove
+        shift
+        ;;
+    -s | --sync)
+        rm -rf "$cache_dir/info"
+        download_aur_list
+        exit
+        ;;
+    -u | --update)
+        action=update_pkgs
+        shift
+        ;;
+    --)
+        shift
+        break
+        ;;
+    *) break ;;
+    esac
+done
+
+$action "$@"
