@@ -76,8 +76,11 @@ install_pkgs() {
     fi
 
     if [ ${#aur_pkgs[@]} -gt 0 ]; then
-        printf "%s\n" "${aur_pkgs[@]}" | fzf "${fzf_opts[@]}" --preview "cat -n $pkgs_dir/{1}/PKGBUILD" \
-            --header $'Review PKGBUILDs\nEnter: Accept all\nEscape: Cancel' >/dev/null
+        printf "%s\n" "${aur_pkgs[@]}" | fzf "${fzf_opts[@]}" --no-input \
+            --header-lines-border\
+            --preview "$script_dir/preview_pkgbuild.sh {1}" \
+            --bind="double-click,ctrl-e:execute($EDITOR $pkgs_dir/{1}/PKGBUILD)" \
+            --header $'Review PKGBUILDs\nEnter: Accept all\nEscape: Cancel\nCtrl+E: Edit' >/dev/null
 
         for pkg in "${aur_pkgs[@]}"; do
             cd "$pkgs_dir/$pkg"
