@@ -168,7 +168,7 @@ clean() {
     for dir in "$pkgs_dir"/*; do
         local name
         name="$(basename "$dir")"
-        if ! echo "$pkgs" | grep "^$name$"; then
+        if ! echo "$pkgs" | grep -q "^$name$"; then
             echo "Removing PKGBUILD directory for $name"
             rm -rf "$dir"
         fi
