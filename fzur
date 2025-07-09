@@ -55,19 +55,20 @@ get_dependencies() {
 }
 
 install_pkgs() {
-    local targets=$1
     local aur_pkgs=()
     local pacman_pkgs=()
     local built_pkgs=()
     local pkg
 
-    echo "${bold}Selected:${reset} $targets"
-    for pkg in $targets; do
+    for pkg in "$@"; do
         if [ "$(pacman -Ssq "^$pkg$")" ]; then
             pacman_pkgs+=("$pkg")
-        else
+        elif grep -q "^$pkg$" "$cache_dir/packages.txt"; then
             aur_pkgs+=("$pkg")
             get_dependencies "$pkg"
+        else
+            echo "Unknown package: $pkg"
+            exit 1
         fi
     done
 
@@ -89,7 +90,7 @@ install_pkgs() {
         done
         sudo pacman -U --asdeps "${built_pkgs[@]}"
     fi
-    sudo pacman -Dq --asexplicit $targets
+    sudo pacman -Dq --asexplicit "$@"
 }
 
 select_pkgs() {
@@ -99,11 +100,14 @@ select_pkgs() {
     [ $aur_only = false ] && list=$(pacman -Ssq)
     [ $repos_only = false ] && list+=$(cat "$cache_dir/packages.txt")
 
-    pkgs=$(echo "$list" |
-        fzf -m --header 'Select packages to install' --preview "$script_dir/fzur-info {1}" |
-        xargs)
+    mapfile -t pkgs < <(
+        echo "$list" |
+            fzf -m --header 'Select packages to install' --preview "$script_dir/fzur-info {1}"
+    )
 
-    install_pkgs "$pkgs"
+    [ "${#pkgs[@]}" -eq 0 ] && return
+    echo "${bold}Selected:${reset} ${pkgs[*]}"
+    install_pkgs "${pkgs[@]}"
 }
 
 update_pkgs() {
@@ -142,16 +146,20 @@ update_pkgs() {
 }
 
 remove() {
-    local pkgs
-    local filter=''
-    [ $aur_only = true ] && filter='-m'
-    [ $repos_only = true ] && filter='-n'
+    local pkgs=()
+    if [ $# -gt 0 ]; then
+        pkgs=("$@")
+    else
+        local filter=''
+        [ $aur_only = true ] && filter='-m'
+        [ $repos_only = true ] && filter='-n'
 
-    mapfile -t pkgs < <(
-        pacman -Qqe $filter | fzf -m --header 'Select packages to remove' --preview 'pacman -Qi {1}'
-    )
-    [ "${#pkgs[@]}" -eq 0 ] && return
-    echo Selected for removal: "${pkgs[@]}"
+        mapfile -t pkgs < <(
+            pacman -Qqe $filter | fzf -m --header 'Select packages to remove' --preview 'pacman -Qi {1}'
+        )
+        [ "${#pkgs[@]}" -eq 0 ] && return
+        echo Selected for removal: "${pkgs[@]}"
+    fi
     sudo pacman -Rns "${pkgs[@]}"
 }
 
@@ -176,7 +184,7 @@ clean() {
 }
 
 show_help() {
-    echo -e 'Usage: fzur [options]\n'
+    echo -e 'Usage: fzur [options] [packages]\n'
     echo -e "-c, --clean\tRemove orhpaned packages and clear the fzur cache (except used repositories)"
     echo -e "-i, --install\tInstall packages with fzf (default)"
     echo -e "-r, --remove\tRemove pacakges and their dependencies with fzf (pacman -Rns)"
@@ -184,10 +192,11 @@ show_help() {
     echo -e "-u, --update\tRun pacman -Syu and select AUR updates with fzf\n"
     echo -e "-a, --aur\tOnly show/update AUR packages"
     echo -e "--no-aur\tDo not show/update any AUR packages"
-    echo -e "--makepkg-flags\tmakepkg flags to be passed when using --install or --update"
+    echo -e "--makepkg-flags\tmakepkg flags to be passed when using --install or --update\n"
+    echo "Packages may be passed to --install or --remove to skip the fzf menu"
 }
 
-action=select_pkgs
+action=install
 aur_only=false
 repos_only=false
 makepkg_opts=''
@@ -212,7 +221,7 @@ while true; do
         exit
         ;;
     -i | --install)
-        action=select_pkgs
+        action=install
         shift
         ;;
     --makepkg-flags)
@@ -243,5 +252,14 @@ while true; do
     *) break ;;
     esac
 done
+
+if [ $action = install ]; then
+    if [ $# -eq 0 ]; then
+        select_pkgs
+    else
+        install_pkgs "$@"
+    fi
+    exit
+fi
 
 $action "$@"
