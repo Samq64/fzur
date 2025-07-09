@@ -82,7 +82,7 @@ install_pkgs() {
         for pkg in "${aur_pkgs[@]}"; do
             cd "$pkgs_dir/$pkg"
             echo -e "\n${bold}Installing ${pkg}...\n${reset}"
-            makepkg "$@"
+            makepkg $makepkg_opts
             local tmp
             mapfile -t tmp < <(makepkg --packagelist | grep -v '\-debug.*-any.pkg.tar.zst')
             built_pkgs+=("${tmp[@]}")
@@ -93,21 +93,22 @@ install_pkgs() {
 }
 
 select_pkgs() {
+    local list pkgs
     [ -f "$cache_dir/packages.txt" ] || download_aur_list
 
-    pkgs=$(pacman -Ssq |
-        cat - "$cache_dir/packages.txt" |
+    [ $aur_only = false ] && list=$(pacman -Ssq)
+    [ $repos_only = false ] && list+=$(cat "$cache_dir/packages.txt")
+
+    pkgs=$(echo "$list" |
         fzf -m --header 'Select packages to install' --preview "$script_dir/fzur-info {1}" |
         xargs)
 
-    install_pkgs "$pkgs" "$@"
+    install_pkgs "$pkgs"
 }
 
 update_pkgs() {
-    printf 'Update all non-AUR packages? (y/n): '
-    read -r answer
-    [ "${answer,,}" = y ] && sudo pacman -Syu
-
+    [ $aur_only = false ] && sudo pacman -Syu
+    [ $repos_only = true ] && return
     local updates=()
     local pkg
     echo "${bold}Checking for AUR updates...${reset}"
@@ -137,13 +138,17 @@ update_pkgs() {
     local selected
     selected=$(printf "%s\n" "${updates[@]}" | fzf --accept-nth 1 -m \
         --header 'Select AUR packages to update' --bind 'load:select-all' | xargs)
-    install_pkgs "$selected" "$@"
+    install_pkgs "$selected"
 }
 
 remove() {
     local pkgs
+    local filter=''
+    [ $aur_only = true ] && filter='-m'
+    [ $repos_only = true ] && filter='-n'
+
     mapfile -t pkgs < <(
-        pacman -Qeq | fzf -m --header 'Select packages to remove' --preview 'pacman -Qi {1}'
+        pacman -Qqe $filter | fzf -m --header 'Select packages to remove' --preview 'pacman -Qi {1}'
     )
     [ "${#pkgs[@]}" -eq 0 ] && return
     echo Selected for removal: "${pkgs[@]}"
@@ -177,15 +182,27 @@ show_help() {
     echo -e "-r, --remove\tRemove pacakges and their dependencies with fzf (pacman -Rns)"
     echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"
     echo -e "-u, --update\tRun pacman -Syu and select AUR updates with fzf\n"
-    echo "makepkg flags may be passed when using --install or --update"
+    echo -e "-a, --aur\tOnly show/update AUR packages"
+    echo -e "--no-aur\tDo not show/update any AUR packages"
+    echo -e "--makepkg-flags\tmakepkg flags to be passed when using --install or --update"
 }
 
 action=select_pkgs
-args=$(getopt -n fzur -o chirsu --long clean,install,help,remove,sync,update -- "$@")
+aur_only=false
+repos_only=false
+makepkg_opts=''
+args=$(getopt -n fzur -o achirsu \
+    --long aur,no-aur,clean,install,help,makepkg-flags:,remove,sync,update \
+    -- "$@")
+
 eval set -- "$args"
 
 while true; do
     case $1 in
+    -a | --aur)
+        aur_only=true
+        shift
+        ;;
     -c | --clean)
         clean
         exit
@@ -196,6 +213,14 @@ while true; do
         ;;
     -i | --install)
         action=select_pkgs
+        shift
+        ;;
+    --makepkg-flags)
+        makepkg_opts=$2
+        shift 2
+        ;;
+    --no-aur)
+        repos_only=true
         shift
         ;;
     -r | --remove)
