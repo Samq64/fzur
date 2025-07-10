@@ -25,7 +25,8 @@ update_repo() {
     mkdir -p "$pkgs_dir"
     cd "$pkgs_dir"
     if [ -d "$pkg" ]; then
-        cd "$pkg" && git pull --quiet
+        echo "Pulling $pkg..."
+        cd "$pkg" && git pull --quiet --autostash
     else
         echo Cloning "$pkg" from the AUR...
         git clone --quiet "https://aur.archlinux.org/$pkg"
