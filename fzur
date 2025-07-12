@@ -49,6 +49,7 @@ get_dependencies() {
             # Check if pakcage already exists in array
             if ! printf '%s\n' "${aur_pkgs[@]}" | grep -Fxq -- "$dep"; then
                 aur_pkgs+=("$dep")
+                review_pkgs+=("$dep")
                 get_dependencies "$dep"
             fi
         fi
@@ -58,14 +59,22 @@ get_dependencies() {
 install_pkgs() {
     local aur_pkgs=()
     local pacman_pkgs=()
+    local review_pkgs=()
     local built_pkgs=()
+    local skip_review=false
     local pkg
+
+    if [ "$1" = '--skip-review' ]; then
+        skip_review=true
+        shift
+    fi
 
     for pkg in "$@"; do
         if [ "$(pacman -Ssq "^$pkg$")" ]; then
             pacman_pkgs+=("$pkg")
         elif grep -q "^$pkg$" "$FZUR_CACHE/packages.txt"; then
             aur_pkgs+=("$pkg")
+            [ $skip_review = false ] && review_pkgs+=("$pkg")
             get_dependencies "$pkg"
         else
             echo "Unknown package: $pkg"
@@ -77,10 +86,12 @@ install_pkgs() {
         sudo pacman -S --asdeps --needed "${pacman_pkgs[@]}"
     fi
 
-    if [ ${#aur_pkgs[@]} -gt 0 ]; then
-        printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat -n $pkgs_dir/{1}/PKGBUILD" \
+    if [ ${#review_pkgs[@]} -gt 0 ]; then
+        printf "%s\n" "${review_pkgs[@]}" | fzf --preview "$script_dir/review-preview.sh {1}" \
             --header $'Review PKGBUILDs\nEnter: Accept all\nEscape: Cancel' >/dev/null
+    fi
 
+    if [ ${#aur_pkgs[@]} -gt 0 ]; then
         for pkg in "${aur_pkgs[@]}"; do
             cd "$pkgs_dir/$pkg"
             echo -e "\n${bold}Installing ${pkg}...\n${reset}"
@@ -132,7 +143,7 @@ update_pkgs() {
             new="$(awk '/^\s*epoch/{print $3}' .SRCINFO):$new"
         fi
         if [ "$(vercmp "$installed" "$new")" -lt 0 ]; then
-            updates+=("$pkg ($installed => $new)")
+            updates+=("$pkg")
         fi
     done
 
@@ -141,9 +152,12 @@ update_pkgs() {
     fi
 
     local selected
-    selected=$(printf "%s\n" "${updates[@]}" | fzf --accept-nth 1 -m \
-        --header 'Select AUR packages to update' --bind 'load:select-all' | xargs)
-    install_pkgs "$selected"
+    mapfile -t selected < <(
+        printf "%s\n" "${updates[@]}" | fzf -m \
+            --preview "$script_dir/review-preview.sh {1}" \
+            --header 'Select AUR packages to update' --bind 'load:select-all'
+    )
+    [ ${#selected[@]} -gt 0 ] && install_pkgs --skip-review "${selected[@]}"
 }
 
 remove() {
