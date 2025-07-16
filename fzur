@@ -8,6 +8,7 @@ export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%,wrap'
 cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
 pkgs_dir="$cache_dir/pkgbuild"
 script_dir=$(realpath "$(dirname "$0")")
+pulled_repos=()
 
 bold=$(tput bold)
 yellow=$(tput setaf 3)
@@ -22,6 +23,10 @@ download_aur_list() {
 
 update_repo() {
     local pkg=$1
+    if printf '%s\n' "${pulled_repos[@]}" | grep -Fxq "$pkg"; then
+        return
+    fi
+
     mkdir -p "$pkgs_dir"
     cd "$pkgs_dir"
     if [ -d "$pkg" ]; then
@@ -32,6 +37,7 @@ update_repo() {
         git clone --quiet "https://aur.archlinux.org/$pkg"
         cd "$pkg"
     fi
+    pulled_repos+=("$pkg")
 }
 
 get_dependencies() {
