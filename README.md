@@ -1,10 +1,10 @@
-# Fzur
+# Fur
 
-This is Fzur, which stands for **fz**f A**UR**. It is a couple of bash scripts made to simplify the process of searching for, installing and updating packages from the [Arch User Repository](https://aur.archlinux.org), which is a large collection of build scripts often referred to as [PKGBUILDs](https://wiki.archlinux.org/title/PKGBUILD) for Arch Linux. It uses the [fzf](https://github.com/junegunn/fzf) fuzzy finder tool for interactively selecting packages and previewing information about them. It is not dependant on other AUR tools.
+This is Fur, which stands for **f**zf A**UR**. It is a couple of bash scripts made to simplify the process of searching for, installing and updating packages from the [Arch User Repository](https://aur.archlinux.org), which is a large collection of build scripts often referred to as [PKGBUILDs](https://wiki.archlinux.org/title/PKGBUILD) for Arch Linux. It uses the [fzf](https://github.com/junegunn/fzf) fuzzy finder tool for interactively selecting packages and previewing information about them. It is not dependant on other AUR tools.
 
 ## Installation
 
-Fzur is available on the AUR as `fzur-git`, which can installed with:
+Fur is available on the AUR as `fzur-git`, which can installed with:
 
 ```sh
 sudo pacman -S --needed base-devel git
@@ -19,7 +19,7 @@ Fzur can be run run on its own which will open the installation menu or with one
 
 The --clean option removes all installed orphaned packages and PKGBUILD repositories for packages that are not installed.
 
-The --install option is the default which downloads the list of all AUR packages, if it does not already exist, and presents an fzf menu listing them all along with the official packages to filter through. Information about each package is displayed in the right pane using the `fzur-info` script which will be explained below.
+The --install option is the default which downloads the list of all AUR packages, if it does not already exist, and presents an fzf menu listing them all along with the official packages to filter through. Information about each package is displayed in the right pane using the `pkg-preview` script which will be explained below.
 
 After the package selection, all of their dependencies will be determined and installed at once. Afterwards another fzf menu will appear, this time to review the AUR PKGBUILDs (build scripts) which can accepted as a group with enter, or the installation can be cancelled with escape. Finally all the AUR packages are installed without further user interaction until the final installation prompt for the built packages.
 
@@ -29,11 +29,11 @@ The --sync option deletes the AUR package information cache and re-downloads the
 
 The --update option prompts to run `pacman -Syu` and then checks all installed AUR packages including ones installed with another tool for updates and presents an fzf menu to choose which ones to accept. The rest of the process is similar to the installation of those packages.
 
-## Usage of fzur-info
+## Usage of pkg-preview
 
 This script displays information about the provided package such as its version, license and dependencies. For AUR packages the information is downloaded from the AUR's remote procedure call (RPC) interface and then cached for 1 day.
 
-`fzur-info` may be run separately from the rest of Fzur and accepts a package name as its only argument, for example: `fzur-info firefox-nightly`.
+`pkg-preview` may be run separately from the rest of Fzur and accepts a package name as its only argument, for example: `pkg-preview firefox-nightly`.
 
 ## Design choices
 
@@ -43,13 +43,13 @@ When opening the package selection menu, it is sorted alphabetically but fzf doe
 
 ### Fewer interactions
 
-Fzur tries to reduce the number of interactions needed when installing or updating packages. This is done by determining the dependencies beforehand and installing all necessary packages form the official repositories first, including build dependencies. Afterwards a prompt is shown to review all PKGBUILDs at once, and finally a confirmation to install the built AUR packages.
+Fur tries to reduce the number of interactions needed when installing or updating packages. This is done by determining the dependencies beforehand and installing all necessary packages form the official repositories first, including build dependencies. Afterwards a prompt is shown to review all PKGBUILDs at once, and finally a confirmation to install the built AUR packages.
 
 ### Stand-alone scripts
 
-There are other tools and even fairly simple command chains that can achieve the majority of Fzur's functionality, however the ones I found all depend on [Paru](https://github.com/Morganamilo/paru) or [Yay](https://github.com/Jguer/yay) which are both 8MB+ programs that need to be compiled from the AUR.
+There are other tools and even fairly simple command chains that can achieve the majority of Fur's functionality, however the ones I found all depend on [Paru](https://github.com/Morganamilo/paru) or [Yay](https://github.com/Jguer/yay) which are both 8MB+ programs that need to be compiled from the AUR.
 
-Fzur, on the other hand only has a few dependencies, none of which are from the AUR and since it is just a couple of shell scripts it does not need to be compiled. It was also a great opportunity for me to expand my shell scripting knowledge.
+Fur, on the other hand only has a few dependencies, none of which are from the AUR and since it is just a couple of shell scripts it does not need to be compiled. It was also a great opportunity for me to expand my shell scripting knowledge.
 
 ## Main resources used
 

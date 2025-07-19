@@ -4,7 +4,7 @@
 
 set -euo pipefail
 COLUMNS=${FZF_PREVIEW_COLUMNS:-$(tput cols)}
-cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
+cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fur
 bold=$(tput bold)
 red=$(tput setaf 1)
 reset=$(tput sgr0)
@@ -73,7 +73,7 @@ mkdir -p "$cache_dir/info"
 cd "$cache_dir/info"
 
 if [ ! -f "$cache_dir/packages.txt" ]; then
-    echo "AUR package list not found. Run fzur -s to download it."
+    echo "AUR package list not found. Run fur -s to download it."
     exit 1
 fi
 

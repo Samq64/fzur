@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# fzur: An fzf AUR helper
-# Requirements: fzur-info (needs jq), base-devel, curl, fzf, git
+# fur: An fzf AUR helper
+# Requirements: pkg-preview.sh (needs jq), base-devel, curl, fzf, git
 
 set -euo pipefail
 
 export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%,wrap'
-cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
+cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fur
 pkgs_dir="$cache_dir/pkgbuild"
 script_dir=$(realpath "$(dirname "$0")")
 pulled_repos=()
@@ -109,7 +109,7 @@ select_pkgs() {
 
     mapfile -t pkgs < <(
         echo "$list" |
-            fzf -m --header 'Select packages to install' --preview "$script_dir/fzur-info {1}"
+            fzf -m --header 'Select packages to install' --preview "$script_dir/pkg-preview.sh {1}"
     )
 
     [ "${#pkgs[@]}" -eq 0 ] && return
@@ -191,8 +191,8 @@ clean() {
 }
 
 show_help() {
-    echo -e 'Usage: fzur [options] [packages]\n'
-    echo -e "-c, --clean\tRemove orhpaned packages and clear the fzur cache (except used repositories)"
+    echo -e 'Usage: fur [options] [packages]\n'
+    echo -e "-c, --clean\tRemove orhpaned packages and clear the Fur cache (except used repositories)"
     echo -e "-i, --install\tInstall packages with fzf (default)"
     echo -e "-r, --remove\tRemove pacakges and their dependencies with fzf (pacman -Rns)"
     echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"
@@ -207,7 +207,7 @@ action=install
 aur_only=false
 repos_only=false
 makepkg_opts=''
-args=$(getopt -n fzur -o achirsu \
+args=$(getopt -n Fur -o achirsu \
     --long aur,no-aur,clean,install,help,makepkg-flags:,remove,sync,update \
     -- "$@")
 
