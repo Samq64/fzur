@@ -5,8 +5,8 @@
 set -euo pipefail
 
 export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%,wrap'
-cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fur
-pkgs_dir="$cache_dir/pkgbuild"
+export FUR_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/fur
+pkgs_dir="$FUR_CACHE/pkgbuild"
 script_dir=$(realpath "$(dirname "$0")")
 pulled_repos=()
 
@@ -15,8 +15,8 @@ yellow=$(tput setaf 3)
 reset=$(tput sgr0)
 
 download_aur_list() {
-    mkdir -p "$cache_dir"
-    cd "$cache_dir"
+    mkdir -p "$FUR_CACHE"
+    cd "$FUR_CACHE"
     echo -e "${bold}Downloading AUR package list...\n${reset}"
     curl https://aur.archlinux.org/packages.gz | gzip -d >packages.txt
 }
@@ -70,7 +70,7 @@ install_pkgs() {
     for pkg in "$@"; do
         if [ "$(pacman -Ssq "^$pkg$")" ]; then
             pacman_pkgs+=("$pkg")
-        elif grep -q "^$pkg$" "$cache_dir/packages.txt"; then
+        elif grep -q "^$pkg$" "$FUR_CACHE/packages.txt"; then
             aur_pkgs+=("$pkg")
             get_dependencies "$pkg"
         else
@@ -102,10 +102,10 @@ install_pkgs() {
 
 select_pkgs() {
     local list pkgs
-    [ -f "$cache_dir/packages.txt" ] || download_aur_list
+    [ -f "$FUR_CACHE/packages.txt" ] || download_aur_list
 
     [ $aur_only = false ] && list=$(pacman -Ssq)
-    [ $repos_only = false ] && list+=$(cat "$cache_dir/packages.txt")
+    [ $repos_only = false ] && list+=$(cat "$FUR_CACHE/packages.txt")
 
     mapfile -t pkgs < <(
         echo "$list" |
@@ -123,10 +123,10 @@ update_pkgs() {
     local updates=()
     local pkg
     echo "${bold}Checking for AUR updates...${reset}"
-    [ -f "$cache_dir/packages.txt" ] || download_aur_list
+    [ -f "$FUR_CACHE/packages.txt" ] || download_aur_list
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
-        if ! grep -q "^$pkg$" "$cache_dir/packages.txt"; then
+        if ! grep -q "^$pkg$" "$FUR_CACHE/packages.txt"; then
             echo "${yellow}Skipping unknown package: ${pkg}${reset}"
             continue
         fi
@@ -175,8 +175,8 @@ clean() {
     orphans=$(pacman -Qdtq || echo '')
     [ -n "$orphans" ] && sudo pacman -Rns $orphans
 
-    rm -f "$cache_dir/packages.txt"
-    rm -rf "$cache_dir/info"
+    rm -f "$FUR_CACHE/packages.txt"
+    rm -rf "$FUR_CACHE/info"
 
     local pkgs
     pkgs=$(pacman -Qqm)
@@ -244,7 +244,7 @@ while true; do
         shift
         ;;
     -s | --sync)
-        rm -rf "$cache_dir/info"
+        rm -rf "$FUR_CACHE/info"
         download_aur_list
         exit
         ;;
