@@ -84,7 +84,7 @@ install_pkgs() {
     fi
 
     if [ ${#aur_pkgs[@]} -gt 0 ]; then
-        printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat -n $pkgs_dir/{1}/PKGBUILD" \
+        printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "$script_dir/review-preview.sh {1}" \
             --header $'Review PKGBUILDs\nEnter: Accept all\nEscape: Cancel' >/dev/null
 
         for pkg in "${aur_pkgs[@]}"; do
@@ -138,7 +138,7 @@ update_pkgs() {
             new="$(awk '/^\s*epoch/{print $3}' .SRCINFO):$new"
         fi
         if [ "$(vercmp "$installed" "$new")" -lt 0 ]; then
-            updates+=("$pkg ($installed => $new)")
+            updates+=("$pkg")
         fi
     done
 
@@ -147,8 +147,8 @@ update_pkgs() {
     fi
 
     local selected
-    mapfile -t selected < <(printf "%s\n" "${updates[@]}" | fzf --accept-nth 1 -m \
-        --header 'Select AUR packages to update' --bind 'load:select-all')
+    mapfile -t selected < <(printf "%s\n" "${updates[@]}" | fzf -m --bind 'load:select-all' \
+        --header 'Select AUR packages to update' --preview "$script_dir/review-preview.sh {1}")
     install_pkgs "${selected[@]}"
 }
 
