@@ -85,7 +85,7 @@ install_pkgs() {
 
     if [ ${#aur_pkgs[@]} -gt 0 ]; then
         printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat -n $pkgs_dir/{1}/PKGBUILD" \
-            --header $'Review PKGBUILDs\nEnter: Accept all\nEscape: Cancel' >/dev/null
+            --header 'Review PKGBUILDs' --footer 'Enter: Accept all | Esc: Cancel' >/dev/null
 
         for pkg in "${aur_pkgs[@]}"; do
             cd "$pkgs_dir/$pkg"
