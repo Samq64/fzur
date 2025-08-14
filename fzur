@@ -43,8 +43,19 @@ update_repo() {
 get_dependencies() {
     update_repo "$1"
 
-    local dep deps
-    deps=$(grep -Po '^\s*(make)?depends = \K[\w\-\.]+' .SRCINFO) || true
+    local dep deps makedeps
+    deps=$(grep -Po '^\s*depends = \K[\w\-\.]+' .SRCINFO) || true
+    makedeps=$(grep -Po '^\s*makedepends = \K[\w\-\.]+' .SRCINFO) || true
+
+    for dep in $makedeps; do
+        [ "$(pacman -Qqs "^$dep$")" ] && continue
+        if [ "$(pacman -Ssq "^$dep$")" ]; then
+            pacman_pkgs+=("$dep")
+        else
+            install_pkgs "$dep"
+            sudo pacman -U --asdeps "$dep"
+        fi
+    done
 
     for dep in $deps; do
         [ "$(pacman -Qqs "^$dep$")" ] && continue
