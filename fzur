@@ -24,6 +24,7 @@ download_aur_list() {
 update_repo() {
     local pkg=$1
     if printf '%s\n' "${pulled_repos[@]}" | grep -Fxq "$pkg"; then
+        cd "$pkgs_dir/$pkg"
         return
     fi
 
@@ -115,7 +116,7 @@ select_pkgs() {
     local list pkgs
     [ -f "$cache_dir/packages.txt" ] || download_aur_list
 
-    [ $aur_only = false ] && list=$(pacman -Ssq)
+    [ $aur_only = false ] && list=$(pacman -Ssq | awk '!seen[$0]++') # Remove duplicates from other repos
     [ $repos_only = false ] && list+=$(cat "$cache_dir/packages.txt")
 
     mapfile -t pkgs < <(
