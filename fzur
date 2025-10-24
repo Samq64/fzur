@@ -114,7 +114,7 @@ install_pkgs() {
 
 select_pkgs() {
     local list pkgs
-    [ -f "$cache_dir/packages.txt" ] || download_aur_list
+    [ -s "$cache_dir/packages.txt" ] || download_aur_list
 
     [ $aur_only = false ] && list=$(pacman -Ssq | awk '!seen[$0]++') # Remove duplicates from other repos
     [ $repos_only = false ] && list+=$(cat "$cache_dir/packages.txt")
@@ -135,7 +135,7 @@ update_pkgs() {
     local updates=()
     local pkg
     echo "${bold}Checking for AUR updates...${reset}"
-    [ -f "$cache_dir/packages.txt" ] || download_aur_list
+    [ -s "$cache_dir/packages.txt" ] || download_aur_list
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
         if ! grep -q "^$pkg$" "$cache_dir/packages.txt"; then

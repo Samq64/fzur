@@ -72,7 +72,7 @@ fi
 mkdir -p "$cache_dir/info"
 cd "$cache_dir/info"
 
-if [ ! -f "$cache_dir/packages.txt" ]; then
+if [ ! -s "$cache_dir/packages.txt" ]; then
     echo "AUR package list not found. Run fzur -s to download it."
     exit 1
 fi
