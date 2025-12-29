@@ -106,7 +106,7 @@ install_pkgs() {
         for pkg in "${reversed_aur_pkgs[@]}"; do
             cd "$pkgs_dir/$pkg"
             echo -e "\n${bold}Installing ${pkg}...\n${reset}"
-            makepkg -i $makepkg_opts
+            makepkg -i --asdeps $makepkg_opts
         done
     fi
     sudo pacman -Dq --asexplicit "$@"
