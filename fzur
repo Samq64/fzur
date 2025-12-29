@@ -44,39 +44,38 @@ update_repo() {
 get_dependencies() {
     update_repo "$1"
 
-    local dep deps makedeps
-    deps=$(grep -Po '^\s*depends = \K[\w\-\.]+' .SRCINFO) || true
-    makedeps=$(grep -Po '^\s*makedepends = \K[\w\-\.]+' .SRCINFO) || true
-
-    for dep in $makedeps; do
-        [ "$(pacman -Qqs "^$dep$")" ] && continue
-        if [ "$(pacman -Ssq "^$dep$")" ]; then
-            pacman_pkgs+=("$dep")
-        else
-            install_pkgs "$dep"
-            sudo pacman -U --asdeps "$dep"
-        fi
-    done
+    local dep deps
+    deps=$(grep -Po '^\s*(make)?depends = \K[\w\-\.]+' .SRCINFO) || true
 
     for dep in $deps; do
+        # Already installed
         [ "$(pacman -Qqs "^$dep$")" ] && continue
+
         if [ "$(pacman -Ssq "^$dep$")" ]; then
             pacman_pkgs+=("$dep")
+            continue
+        fi
+
+        if grep -q "^$dep$" "$cache_dir/packages.txt"; then
+            provider=$dep
         else
-            # https://stackoverflow.com/a/47541882
-            # Check if pakcage already exists in array
-            if ! printf '%s\n' "${aur_pkgs[@]}" | grep -Fxq -- "$dep"; then
-                aur_pkgs+=("$dep")
-                get_dependencies "$dep"
+            mapfile -t providers < <(
+                curl -s "https://aur.archlinux.org/rpc/v5/search?by=provides&arg=$dep" | jq -r '.results[].Name'
+            )
+            if [ "${#providers[@]}" -eq 1 ]; then
+                provider="${providers[0]}"
+            else
+                provider=$(printf "%s\n" "${providers[@]}" | fzf --header "Select a package to provide \"$dep\"")
             fi
         fi
+        aur_pkgs+=("$provider")
+        get_dependencies "$provider"
     done
 }
 
 install_pkgs() {
     local aur_pkgs=()
     local pacman_pkgs=()
-    local built_pkgs=()
     local pkg
 
     for pkg in "$@"; do
@@ -96,18 +95,22 @@ install_pkgs() {
     fi
 
     if [ ${#aur_pkgs[@]} -gt 0 ]; then
+        reversed_aur_pkgs=()
+        for ((i = ${#aur_pkgs[@]} - 1; i >= 0; i--)); do
+            reversed_aur_pkgs+=("${aur_pkgs[i]}")
+        done
+
         printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat -n $pkgs_dir/{1}/PKGBUILD" \
             --header 'Review PKGBUILDs' --footer 'Enter: Accept all | Esc: Cancel' >/dev/null
 
-        for pkg in "${aur_pkgs[@]}"; do
+        for pkg in "${reversed_aur_pkgs[@]}"; do
             cd "$pkgs_dir/$pkg"
             echo -e "\n${bold}Installing ${pkg}...\n${reset}"
             makepkg $makepkg_opts
-            local tmp
-            mapfile -t tmp < <(makepkg --packagelist | grep -v '\-debug.*-any.pkg.tar.zst')
-            built_pkgs+=("${tmp[@]}")
+            local built
+            mapfile -t built < <(makepkg --packagelist | grep -v '\-debug.*-any.pkg.tar.zst')
+            sudo pacman -U --asdeps "${built[@]}"
         done
-        sudo pacman -U --asdeps "${built_pkgs[@]}"
     fi
     sudo pacman -Dq --asexplicit "$@"
 }
