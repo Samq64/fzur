@@ -211,9 +211,9 @@ show_help() {
     echo -e "-r, --remove\tRemove pacakges and their dependencies with fzf (pacman -Rns)"
     echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"
     echo -e "-u, --update\tRun pacman -Syu and select AUR updates with fzf\n"
-    echo -e "-a, --aur\tOnly show/update AUR packages"
-    echo -e "-d, --devel\tUpdate all -git packages"
-    echo -e "--no-aur\tDo not show/update any AUR packages"
+    echo -e "-d, --devel\tRebuild all -git packages when passed with --update"
+    echo -e "-a, --aur\tOnly list or update AUR packages"
+    echo -e "--no-aur\tDo not list or update AUR packages"
     echo -e "--makepkg-flags\tmakepkg flags to be passed when using --install or --update\n"
     echo "Packages may be passed to --install or --remove to skip the fzf menu"
 }
