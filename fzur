@@ -151,6 +151,8 @@ update_pkgs() {
         fi
         if [ "$(vercmp "$installed" "$new")" -lt 0 ]; then
             updates+=("$pkg ($installed => $new)")
+        elif [[ $update_devel = true && $pkg =~ -git$ ]]; then
+            updates+=("$pkg")
         fi
     done
 
@@ -210,6 +212,7 @@ show_help() {
     echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"
     echo -e "-u, --update\tRun pacman -Syu and select AUR updates with fzf\n"
     echo -e "-a, --aur\tOnly show/update AUR packages"
+    echo -e "-d, --devel\tUpdate all -git packages"
     echo -e "--no-aur\tDo not show/update any AUR packages"
     echo -e "--makepkg-flags\tmakepkg flags to be passed when using --install or --update\n"
     echo "Packages may be passed to --install or --remove to skip the fzf menu"
@@ -218,9 +221,10 @@ show_help() {
 action=install
 aur_only=false
 repos_only=false
+update_devel=false
 makepkg_opts=''
-args=$(getopt -n fzur -o achirsu \
-    --long aur,no-aur,clean,install,help,makepkg-flags:,remove,sync,update \
+args=$(getopt -n fzur -o acdhirsu \
+    --long aur,no-aur,clean,devel,install,help,makepkg-flags:,remove,sync,update \
     -- "$@")
 
 eval set -- "$args"
@@ -234,6 +238,10 @@ while true; do
     -c | --clean)
         clean
         exit
+        ;;
+    -d | --devel)
+        update_devel=true
+        shift
         ;;
     -h | --help)
         show_help
