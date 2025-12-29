@@ -106,10 +106,7 @@ install_pkgs() {
         for pkg in "${reversed_aur_pkgs[@]}"; do
             cd "$pkgs_dir/$pkg"
             echo -e "\n${bold}Installing ${pkg}...\n${reset}"
-            makepkg $makepkg_opts
-            local built
-            mapfile -t built < <(makepkg --packagelist | grep -v '\-debug.*-any.pkg.tar.zst')
-            sudo pacman -U --asdeps "${built[@]}"
+            makepkg -i $makepkg_opts
         done
     fi
     sudo pacman -Dq --asexplicit "$@"
