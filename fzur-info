@@ -11,33 +11,33 @@ reset=$(tput sgr0)
 pkg=$1
 
 aur() {
-    if [ "$(find "${pkg}.json" -mtime -1 2>/dev/null)" ]; then
-        info=$(cat "${pkg}.json")
+    if [[ $(find "$pkg.json" -mtime -1 2>/dev/null) ]]; then
+        info=$(<"$pkg.json")
     else
         # Download the package info and flatten the arrays into comma separeated strings
         info=$(curl -s "https://aur.archlinux.org/rpc/v5/info?arg=$pkg" |
             jq -c '.["results"][0] | (.. | arrays) |= join("  ")')
 
-        if [ "$info" = null ]; then
+        if [[ $info = null ]]; then
             echo "${red}Failed to fetch package information for ${pkg}.${reset}"
             exit 1
         fi
-        echo "$info" >"${pkg}.json"
+        echo "$info" >"$pkg.json"
     fi
 
     get() {
         local val
         val=$(jq --arg key "$1" -r '.[$key]' <<<"$info")
-        [ "$val" = null ] && val=None
+        [[ $val = null ]] && val=None
         echo "$val"
     }
 
     maintainer=$(get Maintainer)
-    [ "$maintainer" = None ] && maintainer=${red}Orphan${reset}
+    [[ $maintainer = None ]] && maintainer=${red}Orphan${reset}
 
     version_label=$(get Version)
     outdated_timestamp=$(get OutOfDate)
-    if [ "$outdated_timestamp" != None ]; then
+    if [[ $outdated_timestamp != None ]]; then
         version_label+=" ${red}Out-of-date ($(date -d @"${outdated_timestamp}" +%F))$reset"
     fi
 
@@ -66,18 +66,19 @@ EOF
 
 if [[ $# != 1 || $pkg == -* ]]; then
     echo 'Prints AUR or Arch repository package information'
-    echo "Usage: $0 package-name" && exit 1
+    echo "Usage: $0 package-name"
+    exit 1
 fi
 
 mkdir -p "$cache_dir/info"
 cd "$cache_dir/info"
 
-if [ ! -s "$cache_dir/packages.txt" ]; then
+if [[ ! -s $cache_dir/packages.txt ]]; then
     echo "AUR package list not found. Run fzur -s to download it."
     exit 1
 fi
 
-if grep -q "^$pkg$" "$cache_dir/packages.txt"; then
+if grep -qx "$pkg" "$cache_dir/packages.txt"; then
     aur
 else
     pacman -Si --color=always "$pkg"

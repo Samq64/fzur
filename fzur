@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# fzur: An fzf AUR helper
-# Requirements: fzur-info (needs jq), base-devel, curl, fzf, git
+# fzur: A standalone fzf AUR helper
+# Dependencies: fzur-info, base-devel, curl, fzf, git, jq
 
 set -euo pipefail
 
@@ -23,18 +23,22 @@ download_aur_list() {
 
 update_repo() {
     local pkg=$1
-    if printf '%s\n' "${pulled_repos[@]}" | grep -Fxq "$pkg"; then
-        cd "$pkgs_dir/$pkg"
-        return
-    fi
+
+    for repo in "${pulled_repos[@]}"; do
+        if [[ $repo = "$pkg" ]]; then
+            cd "$pkgs_dir/$pkg"
+            return
+        fi
+    done
 
     mkdir -p "$pkgs_dir"
     cd "$pkgs_dir"
-    if [ -d "$pkg" ]; then
+    if [[ -d $pkg ]]; then
         echo "Pulling $pkg..."
-        cd "$pkg" && git pull --quiet --autostash
+        cd "$pkg"
+        git pull --quiet --autostash
     else
-        echo Cloning "$pkg" from the AUR...
+        echo "Cloning $pkg from the AUR..."
         git clone --quiet "https://aur.archlinux.org/$pkg"
         cd "$pkg"
     fi
@@ -42,27 +46,29 @@ update_repo() {
 }
 
 get_dependencies() {
-    update_repo "$1"
-
     local dep deps
+    update_repo "$1"
     deps=$(grep -Po '^\s*(make)?depends = \K[\w\-\.]+' .SRCINFO) || true
 
     for dep in $deps; do
         # Already installed
-        [ "$(pacman -Qqs "^$dep$")" ] && continue
+        [[ $(pacman -Qqs "^$dep$") ]] && continue
 
-        if [ "$(pacman -Ssq "^$dep$")" ]; then
+        if [[ $(pacman -Ssq "^$dep$") ]]; then
+            # In the Pacman repos
             pacman_pkgs+=("$dep")
             continue
         fi
 
-        if grep -q "^$dep$" "$cache_dir/packages.txt"; then
+        if grep -qx "$dep" "$cache_dir/packages.txt"; then
+            # In the AUR directly
             provider=$dep
         else
+            # Provided by another AUR package
             mapfile -t providers < <(
                 curl -s "https://aur.archlinux.org/rpc/v5/search?by=provides&arg=$dep" | jq -r '.results[].Name'
             )
-            if [ "${#providers[@]}" -eq 1 ]; then
+            if [[ ${#providers[@]} -eq 1 ]]; then
                 provider="${providers[0]}"
             else
                 provider=$(printf "%s\n" "${providers[@]}" | fzf --header "Select a package to provide \"$dep\"")
@@ -79,9 +85,9 @@ install_pkgs() {
     local pkg
 
     for pkg in "$@"; do
-        if [ "$(pacman -Ssq "^$pkg$")" ]; then
+        if [[ $(pacman -Ssq "^$pkg$") ]]; then
             pacman_pkgs+=("$pkg")
-        elif grep -q "^$pkg$" "$cache_dir/packages.txt"; then
+        elif grep -qx "$pkg" "$cache_dir/packages.txt"; then
             aur_pkgs+=("$pkg")
             get_dependencies "$pkg"
         else
@@ -90,11 +96,11 @@ install_pkgs() {
         fi
     done
 
-    if [ ${#pacman_pkgs[@]} -gt 0 ]; then
+    if [[ ${#pacman_pkgs[@]} -gt 0 ]]; then
         sudo pacman -S --asdeps --needed "${pacman_pkgs[@]}"
     fi
 
-    if [ ${#aur_pkgs[@]} -gt 0 ]; then
+    if [[ ${#aur_pkgs[@]} -gt 0 ]]; then
         reversed_aur_pkgs=()
         for ((i = ${#aur_pkgs[@]} - 1; i >= 0; i--)); do
             reversed_aur_pkgs+=("${aur_pkgs[i]}")
@@ -114,31 +120,31 @@ install_pkgs() {
 
 select_pkgs() {
     local list pkgs
-    [ -s "$cache_dir/packages.txt" ] || download_aur_list
+    [[ -s $cache_dir/packages.txt ]] || download_aur_list
 
-    [ $aur_only = false ] && list=$(pacman -Ssq | awk '!seen[$0]++') # Remove duplicates from other repos
-    [ $repos_only = false ] && list+=$(cat "$cache_dir/packages.txt")
+    [[ $aur_only = false ]] && list=$(pacman -Ssq | awk '!seen[$0]++') # Remove duplicates from other repos
+    [[ $repos_only = false ]] && list+=$(<"$cache_dir/packages.txt")
 
     mapfile -t pkgs < <(
         echo "$list" |
-            fzf -m --header 'Select packages to install' --preview "$script_dir/fzur-info {1}"
+            fzf --multi --header 'Select packages to install' --preview "$script_dir/fzur-info {1}"
     )
 
-    [ "${#pkgs[@]}" -eq 0 ] && return
+    [[ ${#pkgs[@]} -eq 0 ]] && return
     echo "${bold}Selected:${reset} ${pkgs[*]}"
     install_pkgs "${pkgs[@]}"
 }
 
 update_pkgs() {
-    [ $aur_only = false ] && sudo pacman -Syu
-    [ $repos_only = true ] && return
+    [[ $aur_only = false ]] && sudo pacman -Syu
+    [[ $repos_only = true ]] && return
     local updates=()
     local pkg
     echo "${bold}Checking for AUR updates...${reset}"
-    [ -s "$cache_dir/packages.txt" ] || download_aur_list
+    [[ -s $cache_dir/packages.txt ]] || download_aur_list
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
-        if ! grep -q "^$pkg$" "$cache_dir/packages.txt"; then
+        if ! grep -qx "$pkg" "$cache_dir/packages.txt"; then
             echo "${yellow}Skipping unknown package: ${pkg}${reset}"
             continue
         fi
@@ -149,36 +155,37 @@ update_pkgs() {
         if grep -q epoch .SRCINFO; then
             new="$(awk '/^\s*epoch/{print $3}' .SRCINFO):$new"
         fi
-        if [ "$(vercmp "$installed" "$new")" -lt 0 ]; then
+        if [[ $(vercmp "$installed" "$new") -lt 0 ]]; then
             updates+=("$pkg ($installed => $new)")
         elif [[ $update_devel = true && $pkg =~ -git$ ]]; then
             updates+=("$pkg")
         fi
     done
 
-    if [ "${#updates[@]}" -eq 0 ]; then
-        echo "All AUR packages are up to date." && return
+    if [[ ${#updates[@]} -eq 0 ]]; then
+        echo "All AUR packages are up to date."
+        return
     fi
 
     local selected
-    mapfile -t selected < <(printf "%s\n" "${updates[@]}" | fzf --accept-nth 1 -m \
+    mapfile -t selected < <(printf "%s\n" "${updates[@]}" | fzf --accept-nth 1 --multi \
         --header 'Select AUR packages to update' --bind 'load:select-all')
     install_pkgs "${selected[@]}"
 }
 
 remove() {
     local pkgs=()
-    if [ $# -gt 0 ]; then
+    if [[ $# -gt 0 ]]; then
         pkgs=("$@")
     else
         local filter=''
-        [ $aur_only = true ] && filter='-m'
-        [ $repos_only = true ] && filter='-n'
+        [[ $aur_only = true ]] && filter='--foreign'
+        [[ $repos_only = true ]] && filter='--native'
 
         mapfile -t pkgs < <(
-            pacman -Qqe $filter | fzf -m --header 'Select packages to remove' --preview 'pacman -Qi {1}'
+            pacman -Qqe $filter | fzf --multi --header 'Select packages to remove' --preview 'pacman -Qi {1}'
         )
-        [ "${#pkgs[@]}" -eq 0 ] && return
+        [[ ${#pkgs[@]} -eq 0 ]] && return
         echo Selected for removal: "${pkgs[@]}"
     fi
     sudo pacman -Rns "${pkgs[@]}"
@@ -187,7 +194,7 @@ remove() {
 clean() {
     local orphans
     orphans=$(pacman -Qdtq || echo '')
-    [ -n "$orphans" ] && sudo pacman -Rns $orphans
+    [[ -n $orphans ]] && sudo pacman -Rns $orphans
 
     rm -f "$cache_dir/packages.txt"
     rm -rf "$cache_dir/info"
@@ -196,8 +203,8 @@ clean() {
     pkgs=$(pacman -Qqm)
     for dir in "$pkgs_dir"/*; do
         local name
-        name="$(basename "$dir")"
-        if ! echo "$pkgs" | grep -q "^$name$"; then
+        name=$(basename "$dir")
+        if ! grep -qx "$name" <<<"$pkgs"; then
             echo "Removing PKGBUILD directory for $name"
             rm -rf "$dir"
         fi
@@ -205,17 +212,22 @@ clean() {
 }
 
 show_help() {
-    echo -e 'Usage: fzur [options] [packages]\n'
-    echo -e "-c, --clean\tRemove orhpaned packages and clear the fzur cache (except used repositories)"
-    echo -e "-i, --install\tInstall packages with fzf (default)"
-    echo -e "-r, --remove\tRemove pacakges and their dependencies with fzf (pacman -Rns)"
-    echo -e "-s, --sync\tRe-download the AUR package list and clear the info cache"
-    echo -e "-u, --update\tRun pacman -Syu and select AUR updates with fzf\n"
-    echo -e "-d, --devel\tRebuild all -git packages when passed with --update"
-    echo -e "-a, --aur\tOnly list or update AUR packages"
-    echo -e "--no-aur\tDo not list or update AUR packages"
-    echo -e "--makepkg-flags\tmakepkg flags to be passed when using --install or --update\n"
-    echo "Packages may be passed to --install or --remove to skip the fzf menu"
+    cat <<EOF
+Usage: fzur [options] [packages]
+
+-c, --clean     Remove orhpaned packages and clear the fzur cache (except used repositories)
+-i, --install   Install packages with fzf (default)
+-r, --remove    Remove pacakges and their dependencies with fzf (pacman -Rns)
+-s, --sync      Re-download the AUR package list and clear the info cache
+-u, --update    Run pacman -Syu and select AUR updates with fzf
+
+-d, --devel     Rebuild all -git packages when passed with --update
+-a, --aur       Only list or update AUR packages
+--no-aur        Do not list or update AUR packages
+--makepkg-flags makepkg flags to be passed when using --install or --update
+
+Packages may be passed to --install or --remove to skip the fzf menu
+EOF
 }
 
 action=install
@@ -280,8 +292,8 @@ while true; do
     esac
 done
 
-if [ $action = install ]; then
-    if [ $# -eq 0 ]; then
+if [[ $action = install ]]; then
+    if [[ $# -eq 0 ]]; then
         select_pkgs
     else
         install_pkgs "$@"
