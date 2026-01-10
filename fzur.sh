@@ -8,14 +8,17 @@ export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%'
 export PACMAN_AUTH=${PACMAN_AUTH:-sudo}
 export CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
 PKGS_DIR="$CACHE_DIR/pkgbuild"
-SCRIPT_DIR=$(realpath "$(dirname "$0")")
-[[ $SCRIPT_DIR = /usr/bin ]] && SCRIPT_DIR=/usr/lib/fzur
-
 declare -ag pulled_repos pacman_pkgs aur_pkgs
 
 bold=$(tput bold)
 yellow=$(tput setaf 3)
 reset=$(tput sgr0)
+
+if [[ $0 == *.sh ]]; then
+    SCRIPT_DIR=$(realpath "$(dirname "$0")")
+else
+    SCRIPT_DIR=/usr/lib/fzur
+fi
 
 download_aur_list() {
     mkdir -p "$CACHE_DIR"
