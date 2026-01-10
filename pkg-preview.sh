@@ -3,10 +3,9 @@
 # Requirements: curl, jq
 
 set -euo pipefail
-COLUMNS=${FZF_PREVIEW_COLUMNS:-$(tput cols)}
+COLUMNS=$FZF_PREVIEW_COLUMNS
 readonly INDENT_WIDTH=18
-readonly PKG=${1:-}
-readonly CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
+readonly PKG=$1
 readonly JSON_FILE="$CACHE_DIR/info/$PKG.json"
 readonly BOLD=$(tput bold || echo '')
 readonly RED=$(tput setaf 1 || echo '')
@@ -50,19 +49,13 @@ print_key_value() {
             -e "1!s/^/$(printf '%*s' $INDENT_WIDTH "")/"
 }
 
-if [[ $# -ne 1 || $PKG == -* ]]; then
-    echo 'Prints AUR or Pacman package information'
-    echo "Usage: $0 package-name"
-    exit 1
-fi
-
 if [[ ! -s $CACHE_DIR/packages.txt ]]; then
-    echo 'AUR package list not found. Run fzur --sync first.' >&2
+    echo 'AUR package list not found.' >&2
     exit 1
 fi
 
 if ! grep -qx "$PKG" "$CACHE_DIR/packages.txt"; then
-    pacman -Si --color=always "$PKG" || exit 1
+    pacman -Si --color=always "$PKG"
     exit
 fi
 

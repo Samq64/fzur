@@ -6,9 +6,11 @@ set -euo pipefail
 
 export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%'
 export PACMAN_AUTH=${PACMAN_AUTH:-sudo}
-cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
-pkgs_dir="$cache_dir/pkgbuild"
-script_dir=$(realpath "$(dirname "$0")")
+export CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
+PKGS_DIR="$CACHE_DIR/pkgbuild"
+SCRIPT_DIR=$(realpath "$(dirname "$0")")
+[[ $SCRIPT_DIR = /usr/bin ]] && SCRIPT_DIR=/usr/lib/fzur
+
 declare -ag pulled_repos pacman_pkgs aur_pkgs
 
 bold=$(tput bold)
@@ -16,8 +18,8 @@ yellow=$(tput setaf 3)
 reset=$(tput sgr0)
 
 download_aur_list() {
-    mkdir -p "$cache_dir"
-    cd "$cache_dir"
+    mkdir -p "$CACHE_DIR"
+    cd "$CACHE_DIR"
     echo -e "${bold}Downloading AUR package list...\n${reset}"
     curl https://aur.archlinux.org/packages.gz | gzip -d >packages.txt
 }
@@ -27,13 +29,13 @@ update_repo() {
 
     for repo in "${pulled_repos[@]}"; do
         if [[ $repo = "$pkg" ]]; then
-            cd "$pkgs_dir/$pkg"
+            cd "$PKGS_DIR/$pkg"
             return
         fi
     done
 
-    mkdir -p "$pkgs_dir"
-    cd "$pkgs_dir"
+    mkdir -p "$PKGS_DIR"
+    cd "$PKGS_DIR"
     if [[ -d $pkg ]]; then
         echo "Pulling $pkg..."
         cd "$pkg"
@@ -61,7 +63,7 @@ get_dependencies() {
             continue
         fi
 
-        if grep -Fxq "$dep" "$cache_dir/packages.txt"; then
+        if grep -Fxq "$dep" "$CACHE_DIR/packages.txt"; then
             # In the AUR directly
             provider=$dep
         else
@@ -88,7 +90,7 @@ install_pkgs() {
     for pkg in "$@"; do
         if [[ $(pacman -Ssq "^$pkg$") ]]; then
             pacman_pkgs+=("$pkg")
-        elif grep -Fxq "$pkg" "$cache_dir/packages.txt"; then
+        elif grep -Fxq "$pkg" "$CACHE_DIR/packages.txt"; then
             aur_pkgs+=("$pkg")
             get_dependencies "$pkg"
         else
@@ -107,11 +109,11 @@ install_pkgs() {
             reversed_aur_pkgs+=("${aur_pkgs[i]}")
         done
 
-        printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat -n $pkgs_dir/{1}/PKGBUILD" \
+        printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat -n $PKGS_DIR/{1}/PKGBUILD" \
             --header 'Review PKGBUILDs' --footer 'Enter: Accept all | Esc: Cancel' >/dev/null
 
         for pkg in "${reversed_aur_pkgs[@]}"; do
-            cd "$pkgs_dir/$pkg"
+            cd "$PKGS_DIR/$pkg"
             echo -e "\n${bold}Installing ${pkg}...\n${reset}"
             if grep -Fwq "$pkg" <<<"$@"; then
                 makepkg -i $makepkg_opts
@@ -124,14 +126,14 @@ install_pkgs() {
 
 select_pkgs() {
     local list pkgs
-    [[ -s $cache_dir/packages.txt ]] || download_aur_list
+    [[ -s $CACHE_DIR/packages.txt ]] || download_aur_list
 
     [[ $aur_only = false ]] && list=$(pacman -Ssq | awk '!seen[$0]++') # Remove duplicates from other repos
-    [[ $repos_only = false ]] && list+=$(<"$cache_dir/packages.txt")
+    [[ $repos_only = false ]] && list+=$(<"$CACHE_DIR/packages.txt")
 
     mapfile -t pkgs < <(
         echo "$list" |
-            fzf --multi --header 'Select packages to install' --preview "$script_dir/fzur-info {1}"
+            fzf --multi --header 'Select packages to install' --preview "$SCRIPT_DIR/pkg-preview.sh {1}"
     )
 
     [[ ${#pkgs[@]} -eq 0 ]] && return
@@ -145,10 +147,10 @@ update_pkgs() {
     local updates=()
     local pkg
     echo "${bold}Checking for AUR updates...${reset}"
-    [[ -s $cache_dir/packages.txt ]] || download_aur_list
+    [[ -s $CACHE_DIR/packages.txt ]] || download_aur_list
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
-        if ! grep -Fxq "$pkg" "$cache_dir/packages.txt"; then
+        if ! grep -Fxq "$pkg" "$CACHE_DIR/packages.txt"; then
             echo "${yellow}Skipping unknown package: ${pkg}${reset}"
             continue
         fi
@@ -200,12 +202,12 @@ clean() {
     orphans=$(pacman -Qdtq || echo '')
     [[ -n $orphans ]] && $PACMAN_AUTH pacman -Rns $orphans
 
-    rm -f "$cache_dir/packages.txt"
-    rm -rf "$cache_dir/info"
+    rm -f "$CACHE_DIR/packages.txt"
+    rm -rf "$CACHE_DIR/info"
 
     local pkgs
     pkgs=$(pacman -Qqm)
-    for dir in "$pkgs_dir"/*; do
+    for dir in "$PKGS_DIR"/*; do
         local name
         name=$(basename "$dir")
         if ! grep -qx "$name" <<<"$pkgs"; then
@@ -280,7 +282,7 @@ while true; do
         shift
         ;;
     -s | --sync)
-        rm -rf "$cache_dir/info"
+        rm -rf "$CACHE_DIR/info"
         download_aur_list
         exit
         ;;
