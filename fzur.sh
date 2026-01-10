@@ -8,7 +8,7 @@ export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%'
 export PACMAN_AUTH=${PACMAN_AUTH:-sudo}
 export CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
 PKGS_DIR="$CACHE_DIR/pkgbuild"
-declare -ag pulled_repos pacman_pkgs aur_pkgs
+declare -ag pulled_repos pacman_pkgs aur_pkgs review_pkgs
 
 bold=$(tput bold)
 yellow=$(tput setaf 3)
@@ -80,6 +80,7 @@ get_dependencies() {
                 provider=$(printf "%s\n" "${providers[@]}" | fzf --header "Select a package to provide \"$dep\"")
             fi
         fi
+        review_pkgs+=("$dep")
         aur_pkgs+=("$provider")
         get_dependencies "$provider"
     done
@@ -88,12 +89,19 @@ get_dependencies() {
 install_pkgs() {
     aur_pkgs=()
     pacman_pkgs=()
+    review_pkgs=()
     local pkg
+    local skip_review=false
+    if [[ $1 = --skip-review ]]; then
+        skip_review=true
+        shift
+    fi
 
     for pkg in "$@"; do
         if [[ $(pacman -Ssq "^$pkg$") ]]; then
             pacman_pkgs+=("$pkg")
         elif grep -Fxq "$pkg" "$CACHE_DIR/packages.txt"; then
+            [[ $skip_review = false ]] && review_pkgs+=("$pkg")
             aur_pkgs+=("$pkg")
             get_dependencies "$pkg"
         else
@@ -112,8 +120,10 @@ install_pkgs() {
             reversed_aur_pkgs+=("${aur_pkgs[i]}")
         done
 
-        printf "%s\n" "${aur_pkgs[@]}" | fzf --preview "cat -n $PKGS_DIR/{1}/PKGBUILD" \
-            --header 'Review PKGBUILDs' --footer 'Enter: Accept all | Esc: Cancel' >/dev/null
+        if [[ ${#review_pkgs[@]} -gt 0 ]]; then
+            printf "%s\n" "${review_pkgs[@]}" | fzf --preview "$SCRIPT_DIR/diff-preview.sh {1}" \
+                --header 'Review PKGBUILDs' --footer 'Enter: Accept all | Esc: Cancel' >/dev/null
+        fi
 
         for pkg in "${reversed_aur_pkgs[@]}"; do
             cd "$PKGS_DIR/$pkg"
@@ -165,7 +175,7 @@ update_pkgs() {
             new="$(awk '/^\s*epoch/{print $3}' .SRCINFO):$new"
         fi
         if [[ $(vercmp "$installed" "$new") -lt 0 ]]; then
-            updates+=("$pkg ($installed => $new)")
+            updates+=("$pkg")
         elif [[ $update_devel = true && $pkg =~ -git$ ]]; then
             updates+=("$pkg")
         fi
@@ -177,9 +187,10 @@ update_pkgs() {
     fi
 
     local selected
-    mapfile -t selected < <(printf "%s\n" "${updates[@]}" | fzf --accept-nth 1 --multi \
+    mapfile -t selected < <(printf "%s\n" "${updates[@]}" | fzf --multi \
+        --preview "$SCRIPT_DIR/diff-preview.sh {1}" \
         --header 'Select AUR packages to update' --bind 'load:select-all')
-    install_pkgs "${selected[@]}"
+    install_pkgs --skip-review "${selected[@]}"
 }
 
 remove() {
