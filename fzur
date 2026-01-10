@@ -8,7 +8,7 @@ export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%'
 cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
 pkgs_dir="$cache_dir/pkgbuild"
 script_dir=$(realpath "$(dirname "$0")")
-pulled_repos=()
+declare -ag pulled_repos pacman_pkgs aur_pkgs
 
 bold=$(tput bold)
 yellow=$(tput setaf 3)
@@ -60,7 +60,7 @@ get_dependencies() {
             continue
         fi
 
-        if grep -qx "$dep" "$cache_dir/packages.txt"; then
+        if grep -Fxq "$dep" "$cache_dir/packages.txt"; then
             # In the AUR directly
             provider=$dep
         else
@@ -80,14 +80,14 @@ get_dependencies() {
 }
 
 install_pkgs() {
-    local aur_pkgs=()
-    local pacman_pkgs=()
+    aur_pkgs=()
+    pacman_pkgs=()
     local pkg
 
     for pkg in "$@"; do
         if [[ $(pacman -Ssq "^$pkg$") ]]; then
             pacman_pkgs+=("$pkg")
-        elif grep -qx "$pkg" "$cache_dir/packages.txt"; then
+        elif grep -Fxq "$pkg" "$cache_dir/packages.txt"; then
             aur_pkgs+=("$pkg")
             get_dependencies "$pkg"
         else
@@ -112,10 +112,13 @@ install_pkgs() {
         for pkg in "${reversed_aur_pkgs[@]}"; do
             cd "$pkgs_dir/$pkg"
             echo -e "\n${bold}Installing ${pkg}...\n${reset}"
-            makepkg -i --asdeps $makepkg_opts
+            if grep -Fwq "$pkg" <<<"$@"; then
+                makepkg -i $makepkg_opts
+            else
+                makepkg -i --asdeps $makepkg_opts
+            fi
         done
     fi
-    sudo pacman -Dq --asexplicit "$@"
 }
 
 select_pkgs() {
@@ -144,7 +147,7 @@ update_pkgs() {
     [[ -s $cache_dir/packages.txt ]] || download_aur_list
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
-        if ! grep -qx "$pkg" "$cache_dir/packages.txt"; then
+        if ! grep -Fxq "$pkg" "$cache_dir/packages.txt"; then
             echo "${yellow}Skipping unknown package: ${pkg}${reset}"
             continue
         fi
