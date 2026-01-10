@@ -54,7 +54,7 @@ update_repo() {
 get_dependencies() {
     local dep deps
     update_repo "$1"
-    deps=$(grep -Po '^\s*(make)?depends = \K[\w\-\.]+' .SRCINFO) || true
+    deps=$(grep -Po '^\s*(check|make)?depends = \K[\w\-\.]+' .SRCINFO) || true
 
     for dep in $deps; do
         # Already installed
@@ -322,6 +322,7 @@ if [[ $action = install ]]; then
     if [[ $# -eq 0 ]]; then
         select_pkgs
     else
+        [[ -s $FZUR_CACHE/packages.txt ]] || download_aur_list
         install_pkgs "$@"
     fi
     exit
