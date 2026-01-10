@@ -12,9 +12,8 @@ readonly RED=$(tput setaf 1 || echo '')
 readonly RESET=$(tput sgr0 || echo '')
 
 declare -ra KEY_ORDER=(
-    PackageBase Version Description URL License Provides Conflicts
-    Depends OptDepends MakeDepends Submitter Maintainer NumVotes
-    Popularity FirstSubmitted LastModified
+    PackageBase Version Description URL License Provides Conflicts Depends OptDepends
+    MakeDepends Submitter Maintainer NumVotes Popularity FirstSubmitted LastModified
 )
 
 declare -rA LABELS=(
@@ -45,8 +44,7 @@ print_key_value() {
     printf "%b%-*s%b : " "$BOLD" $((INDENT_WIDTH - 3)) "$label" "$RESET"
     printf "%s\n" "$value" |
         fold -s -w $((COLUMNS - INDENT_WIDTH)) |
-        sed -e '2,$s/^ //' \
-            -e "1!s/^/$(printf '%*s' $INDENT_WIDTH "")/"
+        sed -e '2,$s/^ //' -e "1!s/^/$(printf '%*s' $INDENT_WIDTH "")/"
 }
 
 if [[ ! -s $FZUR_CACHE/packages.txt ]]; then
@@ -84,8 +82,7 @@ fi
 print_key_value "Repository" "AUR"
 
 mapfile -t values < <(
-    jq -r --argjson keys "$jq_keys" '
-    $keys[] as $k | (.[$k] // "None")' <"$JSON_FILE"
+    jq -r --argjson keys "$jq_keys" '$keys[] as $k | (.[$k] // "None")' <"$JSON_FILE"
 )
 
 for i in "${!KEY_ORDER[@]}"; do
