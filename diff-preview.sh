@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 pkg=$1
+exclude=(':!.SRCINFO' ':!.gitignore')
 cd "$FZUR_CACHE/pkgbuild/$pkg"
 
-if [ "$(pacman -Qqs "^${pkg}$")" ]; then
-    date=$(pacman -Qi "$pkg" | grep 'Build Date' | cut -d ':' -f 2-)
-    commit=$(git log --before "$(date -d "$date" +%s)" --pretty="%h" -1)
-    git diff --color=always "$commit" -- . ':!.SRCINFO'
+if [[ $(pacman -Qqs "^$pkg$") ]]; then
+    date=$(pacman -Qi "$pkg" | sed -n 's/^Build Date *: //p')
+    commit=$(git log --before "$(date -d "$date" +%s)" -1 --pretty="%h")
 else
-    git diff --color=always "$(git hash-object -t tree /dev/null)" ':!.SRCINFO'
+    commit=$(git hash-object -t tree /dev/null)
 fi
+
+git diff --color=always "$commit" -- . "${exclude[@]}"
