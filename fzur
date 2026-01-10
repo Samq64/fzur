@@ -5,6 +5,7 @@
 set -euo pipefail
 
 export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%'
+export PACMAN_AUTH=${PACMAN_AUTH:-sudo}
 cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
 pkgs_dir="$cache_dir/pkgbuild"
 script_dir=$(realpath "$(dirname "$0")")
@@ -97,7 +98,7 @@ install_pkgs() {
     done
 
     if [[ ${#pacman_pkgs[@]} -gt 0 ]]; then
-        sudo pacman -S --asdeps --needed "${pacman_pkgs[@]}"
+        $PACMAN_AUTH pacman -S --asdeps --needed "${pacman_pkgs[@]}"
     fi
 
     if [[ ${#aur_pkgs[@]} -gt 0 ]]; then
@@ -139,7 +140,7 @@ select_pkgs() {
 }
 
 update_pkgs() {
-    [[ $aur_only = false ]] && sudo pacman -Syu
+    [[ $aur_only = false ]] && $PACMAN_AUTH pacman -Syu
     [[ $repos_only = true ]] && return
     local updates=()
     local pkg
@@ -191,13 +192,13 @@ remove() {
         [[ ${#pkgs[@]} -eq 0 ]] && return
         echo Selected for removal: "${pkgs[@]}"
     fi
-    sudo pacman -Rns "${pkgs[@]}"
+    $PACMAN_AUTH pacman -Rns "${pkgs[@]}"
 }
 
 clean() {
     local orphans
     orphans=$(pacman -Qdtq || echo '')
-    [[ -n $orphans ]] && sudo pacman -Rns $orphans
+    [[ -n $orphans ]] && $PACMAN_AUTH pacman -Rns $orphans
 
     rm -f "$cache_dir/packages.txt"
     rm -rf "$cache_dir/info"
