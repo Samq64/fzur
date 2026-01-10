@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%,wrap'
+export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%'
 cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
 pkgs_dir="$cache_dir/pkgbuild"
 script_dir=$(realpath "$(dirname "$0")")
