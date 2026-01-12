@@ -13,6 +13,7 @@ readonly YELLOW=$(tput setaf 3 || echo '')
 readonly RESET=$(tput sgr0 || echo '')
 
 declare -ag pulled_repos pacman_pkgs aur_pkgs review_pkgs
+declare -Ag seen_deps
 
 if [[ $0 == *.sh ]]; then
     SCRIPT_DIR=$(realpath "$(dirname "$0")")
@@ -42,7 +43,7 @@ update_repo() {
     if [[ -d $pkg ]]; then
         echo "Pulling $pkg..."
         cd "$pkg"
-        git pull --quiet --autostash
+        git pull --quiet --ff-only
     else
         echo "Cloning $pkg from the AUR..."
         git clone --quiet "https://aur.archlinux.org/$pkg"
@@ -52,8 +53,11 @@ update_repo() {
 }
 
 get_dependencies() {
-    local dep deps
+    [[ ${seen_deps[$1]+x} ]] && return
+    seen_deps[$1]=1
+
     update_repo "$1"
+    local dep deps
     deps=$(grep -Po '^\s*(check|make)?depends = \K[\w\-\.]+' .SRCINFO) || true
 
     for dep in $deps; do
