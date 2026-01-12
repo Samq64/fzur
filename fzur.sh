@@ -72,14 +72,14 @@ get_dependencies() {
         else
             # Provided by another AUR package
             mapfile -t providers < <(
-                curl -fsSL "https://aur.archlinux.org/rpc/v5/search?by=provides&arg=$dep" \
-                    | jq -r '.results[].Name'
+                curl -fsSL "https://aur.archlinux.org/rpc/v5/search?by=provides&arg=$dep" |
+                    jq -r '.results[].Name'
             )
             if [[ ${#providers[@]} -eq 1 ]]; then
                 provider="${providers[0]}"
             else
-                provider=$(printf "%s\n" "${providers[@]}" \
-                    | fzf --header "Select a package to provide \"$dep\"")
+                provider=$(printf "%s\n" "${providers[@]}" |
+                    fzf --header "Select a package to provide \"$dep\"")
             fi
         fi
         review_pkgs+=("$dep")
@@ -207,8 +207,8 @@ remove() {
         [[ $repos_only = true ]] && filter='--native'
 
         mapfile -t pkgs < <(
-            pacman -Qqe $filter \
-                | fzf --multi --header 'Select packages to remove' --preview 'pacman -Qi {1}'
+            pacman -Qqe $filter |
+                fzf --multi --header 'Select packages to remove' --preview 'pacman -Qi {1}'
         )
         [[ ${#pkgs[@]} -eq 0 ]] && return
         echo Selected for removal: "${pkgs[@]}"
