@@ -61,6 +61,7 @@ update_repo() {
 }
 
 get_dependencies() {
+    # TODO: proper dependency resolution
     [[ ${seen_deps[$1]+x} ]] && return
     seen_deps[$1]=1
 
@@ -140,13 +141,10 @@ install_pkgs() {
         for pkg in "${reversed_aur_pkgs[@]}"; do
             cd "$PKGS_DIR/$pkg"
             echo -e "\n${BOLD}Installing ${pkg}...\n${RESET}"
-            if grep -Fwq "$pkg" <<<"$@"; then
-                makepkg -i $makepkg_opts
-            else
-                makepkg -i --asdeps $makepkg_opts
-            fi
+            makepkg -i --asdeps $makepkg_opts
         done
     fi
+    $PACMAN_AUTH pacman -Dq --asexplicit "$@"
 }
 
 select_pkgs() {
