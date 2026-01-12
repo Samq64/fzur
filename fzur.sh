@@ -21,6 +21,14 @@ else
     SCRIPT_DIR=/usr/lib/fzur
 fi
 
+is_installed() {
+    pacman -Qqs "^$1$" &>/dev/null
+}
+
+is_repo_pkg() {
+    pacman -Ssq "^$1$" &>/dev/null
+}
+
 download_aur_list() {
     mkdir -p "$FZUR_CACHE"
     cd "$FZUR_CACHE"
@@ -61,11 +69,9 @@ get_dependencies() {
     deps=$(grep -Po '^\s*(check|make)?depends = \K[\w\-\.]+' .SRCINFO) || true
 
     for dep in $deps; do
-        # Already installed
-        pacman -Qqs "^$dep$" >/dev/null && continue
+        is_installed "$dep" && continue
 
-        if pacman -Ssq "^$dep$" >/dev/null; then
-            # In the Pacman repos
+        if is_repo_pkg "$dep"; then
             pacman_pkgs+=("$dep")
             continue
         fi
@@ -104,7 +110,7 @@ install_pkgs() {
     fi
 
     for pkg in "$@"; do
-        if pacman -Ssq "^$pkg$" >/dev/null; then
+        if is_repo_pkg "$pkg"; then
             pacman_pkgs+=("$pkg")
         elif grep -Fxq "$pkg" "$FZUR_CACHE/packages.txt"; then
             [[ $skip_review = false ]] && review_pkgs+=("$pkg")
