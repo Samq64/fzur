@@ -13,7 +13,7 @@ readonly YELLOW=$(tput setaf 3 || echo '')
 readonly RESET=$(tput sgr0 || echo '')
 
 declare -ag pulled_repos pacman_pkgs aur_pkgs review_pkgs
-declare -Ag seen_deps
+declare -Ag seen_pkgs seen_edges
 
 if [[ $0 == *.sh ]]; then
     SCRIPT_DIR=$(realpath "$(dirname "$0")")
@@ -60,13 +60,45 @@ update_repo() {
     pulled_repos+=("$pkg")
 }
 
-get_dependencies() {
-    # TODO: proper dependency resolution
-    [[ ${seen_deps[$1]+x} ]] && return
-    seen_deps[$1]=1
+resolve_provider() {
+    local dep=$1
+    if grep -Fxq "$dep" "$FZUR_CACHE/packages.txt"; then
+        echo "$dep"
+        return
+    fi
 
-    update_repo "$1"
-    local dep deps
+    mapfile -t providers < <(
+        curl -fsSL "https://aur.archlinux.org/rpc/v5/search?by=provides&arg=$dep" |
+            jq -r '.results[].Name'
+    )
+
+    if [[ "${#providers[@]}" -eq 1 ]]; then
+        echo "${providers[0]}"
+    else
+        printf "%s\n" "${providers[@]}" |
+            fzf --header "Select a package to provide \"$dep\""
+    fi
+}
+
+add_edge() {
+    local from="$1" to="$2"
+    local key="$from->$to"
+
+    [[ ${seen_edges[$key]+x} ]] && return
+    seen_edges[$key]=1
+
+    printf '%s %s\n' "$from" "$to" >>"$edges_file"
+}
+
+get_dependencies() {
+    local pkg=$1
+
+    [[ ${seen_pkgs[$pkg]+x} ]] && return
+    seen_pkgs[$pkg]=1
+
+    update_repo "$pkg"
+
+    local dep deps provider
     deps=$(grep -Po '^\s*(check|make)?depends = \K[\w\-\.]+' .SRCINFO) || true
 
     for dep in $deps; do
@@ -77,24 +109,12 @@ get_dependencies() {
             continue
         fi
 
-        if grep -Fxq "$dep" "$FZUR_CACHE/packages.txt"; then
-            # In the AUR directly
-            provider=$dep
-        else
-            # Provided by another AUR package
-            mapfile -t providers < <(
-                curl -fsSL "https://aur.archlinux.org/rpc/v5/search?by=provides&arg=$dep" |
-                    jq -r '.results[].Name'
-            )
-            if [[ ${#providers[@]} -eq 1 ]]; then
-                provider="${providers[0]}"
-            else
-                provider=$(printf "%s\n" "${providers[@]}" |
-                    fzf --header "Select a package to provide \"$dep\"")
-            fi
-        fi
+        provider=$(resolve_provider "$dep")
+
         review_pkgs+=("$dep")
         aur_pkgs+=("$provider")
+
+        add_edge "$provider" "$pkg"
         get_dependencies "$provider"
     done
 }
@@ -109,6 +129,9 @@ install_pkgs() {
         skip_review=true
         shift
     fi
+
+    edges_file=$(mktemp)
+    trap 'rm -f "$edges_file"' EXIT
 
     for pkg in "$@"; do
         if is_repo_pkg "$pkg"; then
@@ -128,17 +151,14 @@ install_pkgs() {
     fi
 
     if [[ ${#aur_pkgs[@]} -gt 0 ]]; then
-        reversed_aur_pkgs=()
-        for ((i = ${#aur_pkgs[@]} - 1; i >= 0; i--)); do
-            reversed_aur_pkgs+=("${aur_pkgs[i]}")
-        done
+        mapfile -t build_order < <(tsort "$edges_file")
 
         if [[ ${#review_pkgs[@]} -gt 0 ]]; then
             printf "%s\n" "${review_pkgs[@]}" | fzf --preview "$SCRIPT_DIR/diff-preview.sh {1}" \
                 --header 'Review PKGBUILDs' --footer 'Enter: Accept all | Esc: Cancel' >/dev/null
         fi
 
-        for pkg in "${reversed_aur_pkgs[@]}"; do
+        for pkg in "${build_order[@]}"; do
             cd "$PKGS_DIR/$pkg"
             echo -e "\n${BOLD}Installing ${pkg}...\n${RESET}"
             makepkg -i --asdeps $makepkg_opts
