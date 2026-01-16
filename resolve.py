@@ -5,22 +5,39 @@ import sys
 from os import environ
 from pathlib import Path
 from subprocess import run, DEVNULL
+from time import time
 
 DEP_PATTERN = re.compile(r"^\s*(?:check|make)?depends = ([\w\-.]+)")
 PKGS_DIR = Path(environ["FZUR_CACHE"]) / "pkgbuild"
 PKGS_DIR.mkdir(parents=True, exist_ok=True)
+MAX_AGE = 3600  # 1 hour
+pacman_cache = {}
 
 
-def pacman_has(pkg, type):
-    return run(["pacman", f"-{type}sq", f"^{pkg}$"], stdout=DEVNULL).returncode == 0
+def pacman_has(pkg, scope):
+    key = (pkg, scope)
+    if key not in pacman_cache:
+        pacman_cache[key] = (
+            run(["pacman", f"-{scope}sq", f"^{pkg}$"], stdout=DEVNULL).returncode == 0
+        )
+    return pacman_cache[key]
+
+
+def repo_is_fresh(repo):
+    try:
+        head = repo / ".git" / "FETCH_HEAD"
+        return time() - head.stat().st_mtime < MAX_AGE
+    except FileNotFoundError:
+        return False
 
 
 def fetch_dependencies(pkg):
     repo = PKGS_DIR / pkg
 
     if repo.is_dir():
-        print(f"Pulling {pkg}...", file=sys.stderr)
-        run(["git", "pull", "-q", "--ff-only"], cwd=repo, check=True)
+        if not repo_is_fresh(repo):
+            print(f"Pulling {pkg}...", file=sys.stderr)
+            run(["git", "pull", "-q", "--ff-only"], cwd=repo, check=True)
     else:
         print(f"Cloning {pkg}...", file=sys.stderr)
         run(
@@ -74,31 +91,29 @@ def resolve(targets):
             print(f"WARNING: Dependency cycle detected for {pkg}", file=sys.stderr)
             return
 
-        if pacman_has(pkg, "Q"):
-            resolved.add(pkg)
-            return
+        if not pacman_has(pkg, "Q"):
+            if pacman_has(pkg, "S"):
+                pacman_pkgs.add(pkg)
+                resolved.add(pkg)
+                return
 
-        if pacman_has(pkg, "S"):
-            pacman_pkgs.add(pkg)
-            resolved.add(pkg)
-            return
+            resolving.add(pkg)
 
-        resolving.add(pkg)
+            for dep in fetch_dependencies(pkg):
+                if pacman_has(dep, "Q") or dep in resolved:
+                    continue
 
-        for dep in fetch_dependencies(pkg):
-            if pacman_has(dep, "Q") or dep in resolved:
-                continue
+                if pacman_has(dep, "S"):
+                    pacman_pkgs.add(dep)
+                    continue
 
-            if pacman_has(dep, "S"):
-                pacman_pkgs.add(dep)
-                continue
+                provider = find_provider(dep)
+                if not provider:
+                    raise RuntimeError(f"Unsatisfied dependency: {dep}")
+                visit(provider)
 
-            provider = find_provider(dep)
-            if not provider:
-                raise RuntimeError(f"Unsatisfied dependency: {dep}")
-            visit(provider)
+            resolving.remove(pkg)
 
-        resolving.remove(pkg)
         resolved.add(pkg)
         order.append(pkg)
 
