@@ -1,24 +1,21 @@
 #!/usr/bin/env bash
-# fzur: A standalone fzf AUR helper
-# Dependencies: base-devel, curl, fzf, git, jq, pacman, sudo (default privilege elevation)
+# Arf: A standalone fzf AUR helper
+# Dependencies: base-devel, curl, fzf, git, jq, pacman, python, sudo (default privilege elevation)
 
 set -euo pipefail
 
 export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%'
 export PACMAN_AUTH=${PACMAN_AUTH:-sudo}
-export FZUR_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
-readonly PKGS_DIR="$FZUR_CACHE/pkgbuild"
+export ARF_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/arf
+readonly PKGS_DIR="$ARF_CACHE/pkgbuild"
 readonly BOLD=$(tput bold || echo '')
 readonly YELLOW=$(tput setaf 3 || echo '')
 readonly RESET=$(tput sgr0 || echo '')
 
-declare -ag pulled_repos pacman_pkgs aur_pkgs review_pkgs
-declare -Ag seen_pkgs seen_edges
-
 if [[ $0 == *.sh ]]; then
     SCRIPT_DIR=$(realpath "$(dirname "$0")")
 else
-    SCRIPT_DIR=/usr/lib/fzur
+    SCRIPT_DIR=/usr/lib/arf
 fi
 
 is_installed() {
@@ -30,21 +27,14 @@ is_repo_pkg() {
 }
 
 download_aur_list() {
-    mkdir -p "$FZUR_CACHE"
-    cd "$FZUR_CACHE"
+    mkdir -p "$ARF_CACHE"
+    cd "$ARF_CACHE"
     echo 'Downloading AUR package list...'
     curl -fsSL https://aur.archlinux.org/packages.gz | gzip -d >packages.txt
 }
 
 update_repo() {
     local pkg=$1
-
-    for repo in "${pulled_repos[@]}"; do
-        if [[ $repo = "$pkg" ]]; then
-            cd "$PKGS_DIR/$pkg"
-            return
-        fi
-    done
 
     mkdir -p "$PKGS_DIR"
     cd "$PKGS_DIR"
@@ -57,72 +47,12 @@ update_repo() {
         git clone --quiet "https://aur.archlinux.org/$pkg"
         cd "$pkg"
     fi
-    pulled_repos+=("$pkg")
-}
-
-resolve_provider() {
-    local dep=$1
-    if grep -Fxq "$dep" "$FZUR_CACHE/packages.txt"; then
-        echo "$dep"
-        return
-    fi
-
-    mapfile -t providers < <(
-        curl -fsSL "https://aur.archlinux.org/rpc/v5/search?by=provides&arg=$dep" |
-            jq -r '.results[].Name'
-    )
-
-    if [[ "${#providers[@]}" -eq 1 ]]; then
-        echo "${providers[0]}"
-    else
-        printf "%s\n" "${providers[@]}" |
-            fzf --header "Select a package to provide \"$dep\""
-    fi
-}
-
-add_edge() {
-    local from="$1" to="$2"
-    local key="$from->$to"
-
-    [[ ${seen_edges[$key]+x} ]] && return
-    seen_edges[$key]=1
-
-    printf '%s %s\n' "$from" "$to" >>"$edges_file"
-}
-
-get_dependencies() {
-    local pkg=$1
-
-    [[ ${seen_pkgs[$pkg]+x} ]] && return
-    seen_pkgs[$pkg]=1
-
-    update_repo "$pkg"
-
-    local dep deps provider
-    deps=$(grep -Po '^\s*(check|make)?depends = \K[\w\-\.]+' .SRCINFO) || true
-
-    for dep in $deps; do
-        is_installed "$dep" && continue
-
-        if is_repo_pkg "$dep"; then
-            pacman_pkgs+=("$dep")
-            continue
-        fi
-
-        provider=$(resolve_provider "$dep")
-
-        review_pkgs+=("$dep")
-        aur_pkgs+=("$provider")
-
-        add_edge "$provider" "$pkg"
-        get_dependencies "$provider"
-    done
 }
 
 install_pkgs() {
-    aur_pkgs=()
-    pacman_pkgs=()
-    review_pkgs=()
+    local aur_pkgs=()
+    local pacman_pkgs=()
+    local review_pkgs=()
     local pkg
     local skip_review=false
     if [[ $1 = --skip-review ]]; then
@@ -130,35 +60,27 @@ install_pkgs() {
         shift
     fi
 
-    edges_file=$(mktemp)
-    trap 'rm -f "$edges_file"' EXIT
-
-    for pkg in "$@"; do
-        if is_repo_pkg "$pkg"; then
-            pacman_pkgs+=("$pkg")
-        elif grep -Fxq "$pkg" "$FZUR_CACHE/packages.txt"; then
-            [[ $skip_review = false ]] && review_pkgs+=("$pkg")
+    while read -r type pkg; do
+        case "$type" in
+        AUR)
             aur_pkgs+=("$pkg")
-            get_dependencies "$pkg"
-        else
-            echo "Unknown package: $pkg"
-            exit 1
-        fi
-    done
+            [[ $skip_review = false ]] && review_pkgs+=("$pkg")
+            ;;
+        PACMAN) pacman_pkgs+=("$pkg") ;;
+        esac
+    done < <("$SCRIPT_DIR/resolve.py" "$@")
 
     if [[ ${#pacman_pkgs[@]} -gt 0 ]]; then
         $PACMAN_AUTH pacman -S --asdeps --needed "${pacman_pkgs[@]}"
     fi
 
     if [[ ${#aur_pkgs[@]} -gt 0 ]]; then
-        mapfile -t build_order < <(tsort "$edges_file")
-
         if [[ ${#review_pkgs[@]} -gt 0 ]]; then
             printf "%s\n" "${review_pkgs[@]}" | fzf --preview "$SCRIPT_DIR/diff-preview.sh {1}" \
                 --header 'Review PKGBUILDs' --footer 'Enter: Accept all | Esc: Cancel' >/dev/null
         fi
 
-        for pkg in "${build_order[@]}"; do
+        for pkg in "${aur_pkgs[@]}"; do
             cd "$PKGS_DIR/$pkg"
             echo -e "\n${BOLD}Installing ${pkg}...\n${RESET}"
             makepkg -i --asdeps $makepkg_opts
@@ -169,13 +91,13 @@ install_pkgs() {
 
 select_pkgs() {
     local list pkgs
-    [[ -s $FZUR_CACHE/packages.txt ]] || download_aur_list
+    [[ -s $ARF_CACHE/packages.txt ]] || download_aur_list
 
     if [[ $aur_only = false ]]; then
         list=$(pacman -Ssq | awk '!seen[$0]++') # Remove duplicates from other repos
     fi
 
-    [[ $repos_only = false ]] && list+=$(<"$FZUR_CACHE/packages.txt")
+    [[ $repos_only = false ]] && list+=$(<"$ARF_CACHE/packages.txt")
 
     mapfile -t pkgs < <(
         echo "$list" |
@@ -194,10 +116,10 @@ update_pkgs() {
     local updates=()
     local pkg
     echo "${BOLD}Checking for AUR updates...${RESET}"
-    [[ -s $FZUR_CACHE/packages.txt ]] || download_aur_list
+    [[ -s $ARF_CACHE/packages.txt ]] || download_aur_list
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
-        if ! grep -Fxq "$pkg" "$FZUR_CACHE/packages.txt"; then
+        if ! grep -Fxq "$pkg" "$ARF_CACHE/packages.txt"; then
             echo "${YELLOW}Skipping unknown package: ${pkg}${RESET}"
             continue
         fi
@@ -249,8 +171,8 @@ clean() {
     orphans=$(pacman -Qdtq || echo '')
     [[ -n $orphans ]] && $PACMAN_AUTH pacman -Rns $orphans
 
-    rm -f "$FZUR_CACHE/packages.txt"
-    rm -rf "$FZUR_CACHE/info"
+    rm -f "$ARF_CACHE/packages.txt"
+    rm -rf "$ARF_CACHE/info"
 
     local pkgs
     pkgs=$(pacman -Qqm)
@@ -267,9 +189,9 @@ clean() {
 
 show_help() {
     cat <<EOF
-Usage: fzur [options] [packages]
+Usage: arf [options] [packages]
 
--c, --clean     Remove orphaned packages and clear the fzur cache (except used repositories)
+-c, --clean     Remove orphaned packages and clear the arf cache (except used repositories)
 -i, --install   Install packages with fzf (default)
 -r, --remove    Remove packages and their dependencies with fzf (pacman -Rns)
 -s, --sync      Re-download the AUR package list and clear the info cache
@@ -289,7 +211,7 @@ aur_only=false
 repos_only=false
 update_devel=false
 makepkg_opts=''
-args=$(getopt -n fzur -o acdhirsu \
+args=$(getopt -n arf -o acdhirsu \
     --long aur,no-aur,clean,devel,install,help,makepkg-flags:,remove,sync,update \
     -- "$@")
 
@@ -330,7 +252,7 @@ while true; do
         shift
         ;;
     -s | --sync)
-        rm -rf "$FZUR_CACHE/info"
+        rm -rf "$ARF_CACHE/info"
         download_aur_list
         exit
         ;;
@@ -350,7 +272,7 @@ if [[ $action = install ]]; then
     if [[ $# -eq 0 ]]; then
         select_pkgs
     else
-        [[ -s $FZUR_CACHE/packages.txt ]] || download_aur_list
+        [[ -s $ARF_CACHE/packages.txt ]] || download_aur_list
         install_pkgs "$@"
     fi
     exit
