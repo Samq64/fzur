@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-import os
 import re
 import requests
 import sys
+from os import environ
 from pathlib import Path
-from subprocess import run
+from subprocess import run, DEVNULL
 
 
 def fetch_dependencies(pkg):
-    PKGS_DIR = Path.home() / ".cache/fzur/pkgbuild"
+    PKGS_DIR = Path(f"{environ["FZUR_CACHE"]}/pkgbuild")
     pattern = re.compile(r'^\s*(?:check|make)?depends = ([\w\-.]+)')
     deps = []
 
@@ -71,7 +71,7 @@ def resolve(targets):
     def is_resolved(pkg):
         if pkg in pacman_pkgs or pkg in resolved:
             return True
-        result = run(["pacman", "-Qqs", f"^{pkg}$"], stdout=subprocess.DEVNULL)
+        result = run(["pacman", "-Qqs", f"^{pkg}$"], stdout=DEVNULL)
         if result.returncode == 0:
             return True
         return False
@@ -89,7 +89,7 @@ def resolve(targets):
             if is_resolved(dep):
                 continue
 
-            result = run(["pacman", "-Ssq", f"^{dep}$"], stdout=subprocess.DEVNULL)
+            result = run(["pacman", "-Ssq", f"^{dep}$"], stdout=DEVNULL)
             if result.returncode == 0:
                 pacman_pkgs.add(dep)
             else:
