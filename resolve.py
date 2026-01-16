@@ -8,23 +8,19 @@ from subprocess import run, DEVNULL
 
 
 def fetch_dependencies(pkg):
-    PKGS_DIR = Path(f"{environ["FZUR_CACHE"]}/pkgbuild")
-    pattern = re.compile(r'^\s*(?:check|make)?depends = ([\w\-.]+)')
+    PKGS_DIR = Path(f"{environ['FZUR_CACHE']}/pkgbuild")
+    pattern = re.compile(r"^\s*(?:check|make)?depends = ([\w\-.]+)")
     deps = []
 
     if Path(PKGS_DIR / pkg).is_dir():
         print(f"Pulling {pkg}...", file=sys.stderr)
-        run(
-            ["git", "pull", "-q", "--ff-only"],
-            cwd=PKGS_DIR / pkg,
-            check=True
-        )
+        run(["git", "pull", "-q", "--ff-only"], cwd=PKGS_DIR / pkg, check=True)
     else:
         print(f"Cloning {pkg}...", file=sys.stderr)
         run(
             ["git", "clone", "-q", f"https://aur.archlinux.org/{pkg}.git"],
             cwd=PKGS_DIR,
-            check=True
+            check=True,
         )
 
     with open(PKGS_DIR / pkg / ".SRCINFO", "r") as f:
@@ -39,7 +35,7 @@ def find_provider(pkg_name):
     r = requests.get(
         "https://aur.archlinux.org/rpc/v5/search",
         params={"by": "provides", "arg": pkg_name},
-        timeout=10
+        timeout=10,
     )
 
     r.raise_for_status()
@@ -52,12 +48,7 @@ def find_provider(pkg_name):
     if len(providers) == 1:
         return providers[0]
 
-    cmd = run(
-        ["fzf"],
-        input="\n".join(providers),
-        text=True,
-        capture_output=True
-    )
+    cmd = run(["fzf"], input="\n".join(providers), text=True, capture_output=True)
     selection = cmd.stdout.strip()
     return selection if selection else None
 
