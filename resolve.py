@@ -71,7 +71,8 @@ def resolve(targets):
         if is_resolved(pkg):
             return
         if pkg in resolving:
-            raise RuntimeError(f"Dependency cycle detected: {pkg}")
+            print(f"WARNING: Dependency cycle detected for {pkg}", file=sys.stderr)
+            return
 
         resolving.add(pkg)
         deps = fetch_dependencies(pkg)
