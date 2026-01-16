@@ -48,7 +48,12 @@ def find_provider(pkg_name):
     if len(providers) == 1:
         return providers[0]
 
-    cmd = run(["fzf"], input="\n".join(providers), text=True, capture_output=True)
+    cmd = run(
+        ["fzf", "--header", f"Select a package to provide {pkg_name}"],
+        input="\n".join(providers),
+        text=True,
+        capture_output=True,
+    )
     selection = cmd.stdout.strip()
     return selection if selection else None
 
