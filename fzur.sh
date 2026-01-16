@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # fzur: A standalone fzf AUR helper
-# Dependencies: base-devel, curl, fzf, git, jq, pacman, sudo (default privilege elevation)
+# Dependencies: base-devel, curl, fzf, git, jq, pacman, python, sudo (default privilege elevation)
 
 set -euo pipefail
 
@@ -12,8 +12,7 @@ readonly BOLD=$(tput bold || echo '')
 readonly YELLOW=$(tput setaf 3 || echo '')
 readonly RESET=$(tput sgr0 || echo '')
 
-declare -ag pulled_repos pacman_pkgs aur_pkgs review_pkgs
-declare -Ag seen_pkgs seen_edges
+declare -ag pulled_repos
 
 if [[ $0 == *.sh ]]; then
     SCRIPT_DIR=$(realpath "$(dirname "$0")")
@@ -60,69 +59,10 @@ update_repo() {
     pulled_repos+=("$pkg")
 }
 
-resolve_provider() {
-    local dep=$1
-    if grep -Fxq "$dep" "$FZUR_CACHE/packages.txt"; then
-        echo "$dep"
-        return
-    fi
-
-    mapfile -t providers < <(
-        curl -fsSL "https://aur.archlinux.org/rpc/v5/search?by=provides&arg=$dep" |
-            jq -r '.results[].Name'
-    )
-
-    if [[ "${#providers[@]}" -eq 1 ]]; then
-        echo "${providers[0]}"
-    else
-        printf "%s\n" "${providers[@]}" |
-            fzf --header "Select a package to provide \"$dep\""
-    fi
-}
-
-add_edge() {
-    local from="$1" to="$2"
-    local key="$from->$to"
-
-    [[ ${seen_edges[$key]+x} ]] && return
-    seen_edges[$key]=1
-
-    printf '%s %s\n' "$from" "$to" >>"$edges_file"
-}
-
-get_dependencies() {
-    local pkg=$1
-
-    [[ ${seen_pkgs[$pkg]+x} ]] && return
-    seen_pkgs[$pkg]=1
-
-    update_repo "$pkg"
-
-    local dep deps provider
-    deps=$(grep -Po '^\s*(check|make)?depends = \K[\w\-\.]+' .SRCINFO) || true
-
-    for dep in $deps; do
-        is_installed "$dep" && continue
-
-        if is_repo_pkg "$dep"; then
-            pacman_pkgs+=("$dep")
-            continue
-        fi
-
-        provider=$(resolve_provider "$dep")
-
-        review_pkgs+=("$dep")
-        aur_pkgs+=("$provider")
-
-        add_edge "$provider" "$pkg"
-        get_dependencies "$provider"
-    done
-}
-
 install_pkgs() {
-    aur_pkgs=()
-    pacman_pkgs=()
-    review_pkgs=()
+    local aur_pkgs=()
+    local pacman_pkgs=()
+    local review_pkgs=()
     local pkg
     local skip_review=false
     if [[ $1 = --skip-review ]]; then
@@ -130,35 +70,27 @@ install_pkgs() {
         shift
     fi
 
-    edges_file=$(mktemp)
-    trap 'rm -f "$edges_file"' EXIT
-
-    for pkg in "$@"; do
-        if is_repo_pkg "$pkg"; then
-            pacman_pkgs+=("$pkg")
-        elif grep -Fxq "$pkg" "$FZUR_CACHE/packages.txt"; then
-            [[ $skip_review = false ]] && review_pkgs+=("$pkg")
+    while read -r type pkg; do
+        case "$type" in
+        AUR)
             aur_pkgs+=("$pkg")
-            get_dependencies "$pkg"
-        else
-            echo "Unknown package: $pkg"
-            exit 1
-        fi
-    done
+            [[ $skip_review = false ]] && review_pkgs+=("$pkg")
+            ;;
+        PACMAN) pacman_pkgs+=("$pkg") ;;
+        esac
+    done < <("$SCRIPT_DIR/resolve.py" "$@")
 
     if [[ ${#pacman_pkgs[@]} -gt 0 ]]; then
         $PACMAN_AUTH pacman -S --asdeps --needed "${pacman_pkgs[@]}"
     fi
 
     if [[ ${#aur_pkgs[@]} -gt 0 ]]; then
-        mapfile -t build_order < <(tsort "$edges_file")
-
         if [[ ${#review_pkgs[@]} -gt 0 ]]; then
             printf "%s\n" "${review_pkgs[@]}" | fzf --preview "$SCRIPT_DIR/diff-preview.sh {1}" \
                 --header 'Review PKGBUILDs' --footer 'Enter: Accept all | Esc: Cancel' >/dev/null
         fi
 
-        for pkg in "${build_order[@]}"; do
+        for pkg in "${aur_pkgs[@]}"; do
             cd "$PKGS_DIR/$pkg"
             echo -e "\n${BOLD}Installing ${pkg}...\n${RESET}"
             makepkg -i --asdeps $makepkg_opts
