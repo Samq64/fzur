@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# fzur: A standalone fzf AUR helper
+# Arf: A standalone fzf AUR helper
 # Dependencies: base-devel, curl, fzf, git, jq, pacman, python, sudo (default privilege elevation)
 
 set -euo pipefail
 
 export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%'
 export PACMAN_AUTH=${PACMAN_AUTH:-sudo}
-export FZUR_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/fzur
-readonly PKGS_DIR="$FZUR_CACHE/pkgbuild"
+export ARF_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/arf
+readonly PKGS_DIR="$ARF_CACHE/pkgbuild"
 readonly BOLD=$(tput bold || echo '')
 readonly YELLOW=$(tput setaf 3 || echo '')
 readonly RESET=$(tput sgr0 || echo '')
@@ -15,7 +15,7 @@ readonly RESET=$(tput sgr0 || echo '')
 if [[ $0 == *.sh ]]; then
     SCRIPT_DIR=$(realpath "$(dirname "$0")")
 else
-    SCRIPT_DIR=/usr/lib/fzur
+    SCRIPT_DIR=/usr/lib/arf
 fi
 
 is_installed() {
@@ -27,8 +27,8 @@ is_repo_pkg() {
 }
 
 download_aur_list() {
-    mkdir -p "$FZUR_CACHE"
-    cd "$FZUR_CACHE"
+    mkdir -p "$ARF_CACHE"
+    cd "$ARF_CACHE"
     echo 'Downloading AUR package list...'
     curl -fsSL https://aur.archlinux.org/packages.gz | gzip -d >packages.txt
 }
@@ -91,13 +91,13 @@ install_pkgs() {
 
 select_pkgs() {
     local list pkgs
-    [[ -s $FZUR_CACHE/packages.txt ]] || download_aur_list
+    [[ -s $ARF_CACHE/packages.txt ]] || download_aur_list
 
     if [[ $aur_only = false ]]; then
         list=$(pacman -Ssq | awk '!seen[$0]++') # Remove duplicates from other repos
     fi
 
-    [[ $repos_only = false ]] && list+=$(<"$FZUR_CACHE/packages.txt")
+    [[ $repos_only = false ]] && list+=$(<"$ARF_CACHE/packages.txt")
 
     mapfile -t pkgs < <(
         echo "$list" |
@@ -116,10 +116,10 @@ update_pkgs() {
     local updates=()
     local pkg
     echo "${BOLD}Checking for AUR updates...${RESET}"
-    [[ -s $FZUR_CACHE/packages.txt ]] || download_aur_list
+    [[ -s $ARF_CACHE/packages.txt ]] || download_aur_list
 
     for pkg in $(pacman -Qqm | grep -v '\-debug$'); do
-        if ! grep -Fxq "$pkg" "$FZUR_CACHE/packages.txt"; then
+        if ! grep -Fxq "$pkg" "$ARF_CACHE/packages.txt"; then
             echo "${YELLOW}Skipping unknown package: ${pkg}${RESET}"
             continue
         fi
@@ -171,8 +171,8 @@ clean() {
     orphans=$(pacman -Qdtq || echo '')
     [[ -n $orphans ]] && $PACMAN_AUTH pacman -Rns $orphans
 
-    rm -f "$FZUR_CACHE/packages.txt"
-    rm -rf "$FZUR_CACHE/info"
+    rm -f "$ARF_CACHE/packages.txt"
+    rm -rf "$ARF_CACHE/info"
 
     local pkgs
     pkgs=$(pacman -Qqm)
@@ -189,9 +189,9 @@ clean() {
 
 show_help() {
     cat <<EOF
-Usage: fzur [options] [packages]
+Usage: arf [options] [packages]
 
--c, --clean     Remove orphaned packages and clear the fzur cache (except used repositories)
+-c, --clean     Remove orphaned packages and clear the arf cache (except used repositories)
 -i, --install   Install packages with fzf (default)
 -r, --remove    Remove packages and their dependencies with fzf (pacman -Rns)
 -s, --sync      Re-download the AUR package list and clear the info cache
@@ -211,7 +211,7 @@ aur_only=false
 repos_only=false
 update_devel=false
 makepkg_opts=''
-args=$(getopt -n fzur -o acdhirsu \
+args=$(getopt -n arf -o acdhirsu \
     --long aur,no-aur,clean,devel,install,help,makepkg-flags:,remove,sync,update \
     -- "$@")
 
@@ -252,7 +252,7 @@ while true; do
         shift
         ;;
     -s | --sync)
-        rm -rf "$FZUR_CACHE/info"
+        rm -rf "$ARF_CACHE/info"
         download_aur_list
         exit
         ;;
@@ -272,7 +272,7 @@ if [[ $action = install ]]; then
     if [[ $# -eq 0 ]]; then
         select_pkgs
     else
-        [[ -s $FZUR_CACHE/packages.txt ]] || download_aur_list
+        [[ -s $ARF_CACHE/packages.txt ]] || download_aur_list
         install_pkgs "$@"
     fi
     exit

@@ -6,7 +6,7 @@ set -euo pipefail
 COLUMNS=$FZF_PREVIEW_COLUMNS
 readonly INDENT_WIDTH=18
 readonly PKG=$1
-readonly JSON_FILE="$FZUR_CACHE/info/$PKG.json"
+readonly JSON_FILE="$ARF_CACHE/info/$PKG.json"
 readonly BOLD=$(tput bold || echo '')
 readonly RED=$(tput setaf 1 || echo '')
 readonly RESET=$(tput sgr0 || echo '')
@@ -47,12 +47,12 @@ print_key_value() {
         sed -e '2,$s/^ //' -e "1!s/^/$(printf '%*s' $INDENT_WIDTH "")/"
 }
 
-if [[ ! -s $FZUR_CACHE/packages.txt ]]; then
+if [[ ! -s $ARF_CACHE/packages.txt ]]; then
     echo 'AUR package list not found.' >&2
     exit 1
 fi
 
-if ! grep -qx "$PKG" "$FZUR_CACHE/packages.txt"; then
+if ! grep -qx "$PKG" "$ARF_CACHE/packages.txt"; then
     pacman -Si --color=always "$PKG"
     exit
 fi
@@ -75,7 +75,7 @@ if ! cache_is_fresh "$JSON_FILE"; then
         | .Maintainer //= ($red + "Orphan" + $reset)
         | with_entries(select((.key as $k | $keys | index($k)) and (.value != null)))
     ' >"$tmp_json"
-    mkdir -p "$FZUR_CACHE/info"
+    mkdir -p "$ARF_CACHE/info"
     mv "$tmp_json" "$JSON_FILE"
 fi
 

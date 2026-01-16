@@ -8,7 +8,7 @@ from subprocess import run, DEVNULL
 from time import time
 
 DEP_PATTERN = re.compile(r"^\s*(?:check|make)?depends = ([\w\-.]+)")
-PKGS_DIR = Path(environ["FZUR_CACHE"]) / "pkgbuild"
+PKGS_DIR = Path(environ["ARF_CACHE"]) / "pkgbuild"
 PKGS_DIR.mkdir(parents=True, exist_ok=True)
 MAX_AGE = 3600  # 1 hour
 pacman_cache = {}
