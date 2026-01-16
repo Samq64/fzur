@@ -63,7 +63,7 @@ def resolve(targets):
         if pkg in pacman_pkgs or pkg in resolved:
             return True
         result = run(["pacman", "-Qqs", f"^{pkg}$"], stdout=DEVNULL)
-        if result.returncode == 0:
+        if result.returncode == 0 and not pkg in targets:
             return True
         return False
 
