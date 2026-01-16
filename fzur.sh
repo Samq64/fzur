@@ -12,8 +12,6 @@ readonly BOLD=$(tput bold || echo '')
 readonly YELLOW=$(tput setaf 3 || echo '')
 readonly RESET=$(tput sgr0 || echo '')
 
-declare -ag pulled_repos
-
 if [[ $0 == *.sh ]]; then
     SCRIPT_DIR=$(realpath "$(dirname "$0")")
 else
@@ -38,13 +36,6 @@ download_aur_list() {
 update_repo() {
     local pkg=$1
 
-    for repo in "${pulled_repos[@]}"; do
-        if [[ $repo = "$pkg" ]]; then
-            cd "$PKGS_DIR/$pkg"
-            return
-        fi
-    done
-
     mkdir -p "$PKGS_DIR"
     cd "$PKGS_DIR"
     if [[ -d $pkg ]]; then
@@ -56,7 +47,6 @@ update_repo() {
         git clone --quiet "https://aur.archlinux.org/$pkg"
         cd "$pkg"
     fi
-    pulled_repos+=("$pkg")
 }
 
 install_pkgs() {
