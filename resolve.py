@@ -91,29 +91,27 @@ def resolve(targets):
             print(f"WARNING: Dependency cycle detected for {pkg}", file=sys.stderr)
             return
 
-        if not pacman_has(pkg, "Q"):
-            if pacman_has(pkg, "S"):
-                pacman_pkgs.add(pkg)
-                resolved.add(pkg)
-                return
+        if pacman_has(pkg, "S"):
+            pacman_pkgs.add(pkg)
+            resolved.add(pkg)
+            return
 
-            resolving.add(pkg)
+        resolving.add(pkg)
 
-            for dep in fetch_dependencies(pkg):
-                if pacman_has(dep, "Q") or dep in resolved:
-                    continue
+        for dep in fetch_dependencies(pkg):
+            if pacman_has(dep, "Q") or dep in resolved:
+                continue
 
-                if pacman_has(dep, "S"):
-                    pacman_pkgs.add(dep)
-                    continue
+            if pacman_has(dep, "S"):
+                pacman_pkgs.add(dep)
+                continue
 
-                provider = find_provider(dep)
-                if not provider:
-                    raise RuntimeError(f"Unsatisfied dependency: {dep}")
-                visit(provider)
+            provider = find_provider(dep)
+            if not provider:
+                raise RuntimeError(f"Unsatisfied dependency: {dep}")
+            visit(provider)
 
-            resolving.remove(pkg)
-
+        resolving.remove(pkg)
         resolved.add(pkg)
         order.append(pkg)
 
