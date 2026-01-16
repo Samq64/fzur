@@ -63,21 +63,19 @@ def resolve(targets):
         if pkg in pacman_pkgs or pkg in resolved:
             return True
         result = run(["pacman", "-Qqs", f"^{pkg}$"], stdout=DEVNULL)
-        if result.returncode == 0 and not pkg in targets:
+        if result.returncode == 0:
             return True
         return False
 
     def visit(pkg):
-        if is_resolved(pkg):
+        if pkg in resolved:
             return
         if pkg in resolving:
             print(f"WARNING: Dependency cycle detected for {pkg}", file=sys.stderr)
             return
 
         resolving.add(pkg)
-        deps = fetch_dependencies(pkg)
-
-        for dep in deps:
+        for dep in fetch_dependencies(pkg):
             if is_resolved(dep):
                 continue
 
