@@ -158,7 +158,8 @@ remove() {
 
         mapfile -t pkgs < <(
             pacman -Qqe $filter |
-                fzf --multi --header 'Select packages to remove' --preview 'pacman -Qi {1}'
+                fzf --multi --header 'Select packages to remove' \
+                    --preview 'COLUMNS=$FZF_PREVIEW_COLUMNS pacman -Qi {1}'
         )
         [[ ${#pkgs[@]} -eq 0 ]] && return
         echo Selected for removal: "${pkgs[@]}"
