@@ -76,8 +76,10 @@ install_pkgs() {
 
     if [[ ${#aur_pkgs[@]} -gt 0 ]]; then
         if [[ ${#review_pkgs[@]} -gt 0 ]]; then
-            printf "%s\n" "${review_pkgs[@]}" | fzf --preview "$SCRIPT_DIR/diff-preview.sh {1}" \
-                --header 'Review PKGBUILDs' --footer 'Enter: Accept all | Esc: Cancel' >/dev/null
+            printf "%s\n" "${review_pkgs[@]}" | fzf --header 'Review Build Scripts' \
+                --footer 'Ctrl+e: Edit PKGBUILD' \
+                --bind "ctrl-e:execute($EDITOR $PKGS_DIR/{1}/PKGBUILD)+refresh-preview" \
+                --preview "$SCRIPT_DIR/diff-preview.sh {1}" > /dev/null
         fi
 
         for pkg in "${aur_pkgs[@]}"; do
