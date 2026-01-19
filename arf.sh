@@ -60,16 +60,15 @@ install_pkgs() {
         shift
     fi
 
-    "$SCRIPT_DIR/resolve.py" "$@" |
-        while read -r type pkg; do
-            case "$type" in
-            AUR)
-                aur_pkgs+=("$pkg")
-                [[ $skip_review = false ]] && review_pkgs+=("$pkg")
-                ;;
-            PACMAN) pacman_pkgs+=("$pkg") ;;
-            esac
-        done
+    while read -r type pkg; do
+        case "$type" in
+        AUR)
+            aur_pkgs+=("$pkg")
+            [[ $skip_review = false ]] && review_pkgs+=("$pkg")
+            ;;
+        PACMAN) pacman_pkgs+=("$pkg") ;;
+        esac
+    done < <("$SCRIPT_DIR/resolve.py" "$@")
 
     if [[ ${#review_pkgs[@]} -gt 0 ]]; then
         printf "%s\n" "${review_pkgs[@]}" | fzf --header 'Review Build Scripts' \
