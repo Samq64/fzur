@@ -52,11 +52,7 @@ def fetch_dependencies(pkg):
         )
 
     with open(repo / ".SRCINFO", "r") as f:
-        return [
-            m.group(1)
-            for line in f
-            if (m :=DEP_PATTERN.match(line))
-        ]
+        return [m.group(1) for line in f if (m := DEP_PATTERN.match(line))]
 
 
 def find_provider(pkg_name):
