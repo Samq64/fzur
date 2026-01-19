@@ -8,7 +8,8 @@ from subprocess import run, DEVNULL
 from time import time
 
 DEP_PATTERN = re.compile(r"^\s*(?:check|make)?depends = ([\w\-.]+)")
-PKGS_DIR = Path(environ["ARF_CACHE"]) / "pkgbuild"
+CACHE_DIR = Path(environ["ARF_CACHE"])
+PKGS_DIR = CACHE_DIR / "pkgbuild"
 PKGS_DIR.mkdir(parents=True, exist_ok=True)
 MAX_AGE = 3600  # 1 hour
 pacman_cache = {}
@@ -39,6 +40,10 @@ def fetch_dependencies(pkg):
             print(f"Pulling {pkg}...", file=sys.stderr)
             run(["git", "pull", "-q", "--ff-only"], cwd=repo, check=True)
     else:
+        with open(f"{CACHE_DIR}/packages.txt", "r") as f:
+            if not any(pkg == line.rstrip("\n") for line in f):
+                raise RuntimeError(f"{pkg} is not an AUR package.")
+
         print(f"Cloning {pkg}...", file=sys.stderr)
         run(
             ["git", "clone", "-q", f"https://aur.archlinux.org/{pkg}.git"],
