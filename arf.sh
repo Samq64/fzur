@@ -70,18 +70,18 @@ install_pkgs() {
         esac
     done < <("$SCRIPT_DIR/resolve.py" "$@")
 
+    if [[ ${#review_pkgs[@]} -gt 0 ]]; then
+        printf "%s\n" "${review_pkgs[@]}" | fzf --header 'Review Build Scripts' \
+            --footer 'Ctrl+e: Edit PKGBUILD' \
+            --bind "ctrl-e:execute($EDITOR $PKGS_DIR/{1}/PKGBUILD)+refresh-preview" \
+            --preview "$SCRIPT_DIR/diff-preview.sh {1}" >/dev/null
+    fi
+
     if [[ ${#pacman_pkgs[@]} -gt 0 ]]; then
         $PACMAN_AUTH pacman -S --asdeps --needed "${pacman_pkgs[@]}"
     fi
 
     if [[ ${#aur_pkgs[@]} -gt 0 ]]; then
-        if [[ ${#review_pkgs[@]} -gt 0 ]]; then
-            printf "%s\n" "${review_pkgs[@]}" | fzf --header 'Review Build Scripts' \
-                --footer 'Ctrl+e: Edit PKGBUILD' \
-                --bind "ctrl-e:execute($EDITOR $PKGS_DIR/{1}/PKGBUILD)+refresh-preview" \
-                --preview "$SCRIPT_DIR/diff-preview.sh {1}" > /dev/null
-        fi
-
         for pkg in "${aur_pkgs[@]}"; do
             cd "$PKGS_DIR/$pkg"
             echo -e "\n${BOLD}Installing ${pkg}...\n${RESET}"
