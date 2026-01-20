@@ -20,9 +20,8 @@ fi
 
 download_aur_list() {
     mkdir -p "$ARF_CACHE"
-    cd "$ARF_CACHE"
     echo 'Downloading AUR package list...'
-    curl -fsSL https://aur.archlinux.org/packages.gz | gzip -d >packages.txt
+    curl -fsSL https://aur.archlinux.org/packages.gz | gzip -d >"$ARF_CACHE/packages.txt"
 }
 
 update_repo() {
@@ -32,12 +31,10 @@ update_repo() {
     cd "$PKGS_DIR"
     if [[ -d $pkg ]]; then
         echo "Pulling $pkg..."
-        cd "$pkg"
-        git pull --quiet --ff-only
+        git -C "$pkg" pull --quiet --ff-only
     else
         echo "Cloning $pkg from the AUR..."
         git clone --quiet "https://aur.archlinux.org/$pkg"
-        cd "$pkg"
     fi
 }
 
@@ -75,9 +72,8 @@ install_pkgs() {
 
     if [[ ${#aur_pkgs[@]} -gt 0 ]]; then
         for pkg in "${aur_pkgs[@]}"; do
-            cd "$PKGS_DIR/$pkg"
             echo -e "\n${BOLD}Installing ${pkg}...\n${RESET}"
-            makepkg -i --asdeps $makepkg_opts
+            makepkg --dir "$PKGS_DIR/$pkg" --install --asdeps $makepkg_opts
         done
     fi
     $PACMAN_AUTH pacman -Dq --asexplicit "$@"
@@ -118,6 +114,7 @@ update_pkgs() {
             continue
         fi
         update_repo "$pkg"
+        cd "$PKGS_DIR/$pkg"
         local installed new
         installed=$(pacman -Qi "$pkg" | awk '/^Version/{print $3}')
         new=$(awk '/^\s*pkgver/{ver=$3} /^\s*pkgrel/{print ver "-" $3}' .SRCINFO)
