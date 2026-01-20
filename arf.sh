@@ -18,14 +18,6 @@ else
     SCRIPT_DIR=/usr/lib/arf
 fi
 
-is_installed() {
-    pacman -Qqs "^$1$" &>/dev/null
-}
-
-is_repo_pkg() {
-    pacman -Ssq "^$1$" &>/dev/null
-}
-
 download_aur_list() {
     mkdir -p "$ARF_CACHE"
     cd "$ARF_CACHE"
