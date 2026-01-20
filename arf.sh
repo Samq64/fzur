@@ -163,7 +163,6 @@ clean() {
     orphans=$(pacman -Qdtq || echo '')
     [[ -n $orphans ]] && $PACMAN_AUTH pacman -Rns $orphans
 
-    rm -f "$ARF_CACHE/packages.txt"
     rm -rf "$ARF_CACHE/info"
 
     local pkgs
