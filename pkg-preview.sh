@@ -47,7 +47,7 @@ print_key_value() {
         sed -e '2,$s/^ //' -e "1!s/^/$(printf '%*s' $INDENT_WIDTH "")/"
 }
 
-if pacman -Si --color=always "$PKG" 2>/dev/null; then
+if pacman -Si --color=always "$PKG" 2>/dev/null | sed '/^$/q'; then
     exit
 fi
 
