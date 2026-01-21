@@ -84,13 +84,13 @@ select_pkgs() {
     [[ -s $ARF_CACHE/packages.txt ]] || download_aur_list
 
     if [[ $aur_only = false ]]; then
-        list=$(pacman -Ssq | awk '!seen[$0]++') # Remove duplicates from other repos
+        list=$(pacman -Ssq)
     fi
 
     [[ $repos_only = false ]] && list+=$(<"$ARF_CACHE/packages.txt")
 
     mapfile -t pkgs < <(
-        echo "$list" |
+        echo "$list" | awk '!seen[$0]++' |
             fzf --multi --header 'Select packages to install' \
                 --preview "$SCRIPT_DIR/pkg-preview.sh {1}"
     )

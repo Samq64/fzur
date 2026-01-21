@@ -47,14 +47,18 @@ print_key_value() {
         sed -e '2,$s/^ //' -e "1!s/^/$(printf '%*s' $INDENT_WIDTH "")/"
 }
 
+if pacman -Si --color=always "$PKG" 2>/dev/null; then
+    exit
+fi
+
 if [[ ! -s $ARF_CACHE/packages.txt ]]; then
     echo 'AUR package list not found.' >&2
     exit 1
 fi
 
 if ! grep -qx "$PKG" "$ARF_CACHE/packages.txt"; then
-    pacman -Si --color=always "$PKG"
-    exit
+    echo "Unknown package: $PKG" >&2
+    exit 1
 fi
 
 jq_keys=$(printf '%s\n' "${KEY_ORDER[@]}" | jq -R . | jq -s .)
