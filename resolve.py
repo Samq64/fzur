@@ -97,7 +97,7 @@ def build_graph(targets):
             if pacman_has(dep, "Q") or pacman_has(dep, "S"):
                 continue
             provider = find_provider(dep)
-            if not provider(pkg):
+            if not provider:
                 raise RuntimeError(f"Unsatisfied dependency: {dep}")
             deps.append(provider)
 
