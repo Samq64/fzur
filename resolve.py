@@ -2,6 +2,7 @@
 import re
 import requests
 import sys
+from graphlib import TopologicalSorter, CycleError
 from os import environ
 from pathlib import Path
 from subprocess import run, DEVNULL
@@ -78,50 +79,52 @@ def find_provider(pkg_name):
     return result.stdout.strip() or None
 
 
-def resolve(targets):
-    resolved = set()
-    resolving = set()
-    pacman_pkgs = set()
-    order = []
+def build_graph(targets):
+    graph = {}
+    seen = set()
 
-    def visit(pkg):
-        if pkg in resolved:
+    def add_pkg(pkg):
+        if pkg in seen:
             return
 
-        if pkg in resolving:
-            print(f"WARNING: Dependency cycle detected for {pkg}", file=sys.stderr)
-            return
-
+        seen.add(pkg)
         if pacman_has(pkg, "S"):
-            pacman_pkgs.add(pkg)
-            resolved.add(pkg)
+            graph.setdefault(pkg, set())
             return
 
-        resolving.add(pkg)
-
+        deps = []
         for dep in fetch_dependencies(pkg):
-            if pacman_has(dep, "Q") or dep in resolved:
+            if pacman_has(dep, "Q") or pacman_has(dep, "S"):
                 continue
-
-            if pacman_has(dep, "S"):
-                pacman_pkgs.add(dep)
-                continue
-
             provider = find_provider(dep)
-            if not provider:
+            if not provider(pkg):
                 raise RuntimeError(f"Unsatisfied dependency: {dep}")
-            visit(provider)
+            deps.append(provider)
 
-        resolving.remove(pkg)
-        resolved.add(pkg)
-        order.append(pkg)
+        graph[pkg] = set(deps)
+        for d in deps:
+            add_pkg(d)
 
-    for pkg in targets:
-        visit(pkg)
+    for t in targets:
+        add_pkg(t)
+    return graph
 
+
+def resolve(targets):
+    graph = build_graph(targets)
+    ts = TopologicalSorter(graph)
+
+    try:
+        order = list(ts.static_order())
+    except CycleError as e:
+        print(f"ERROR: Dependency cycle detected: {e}", file=sys.stderr)
+        return
+
+    pacman_pkgs = [p for p in order if pacman_has(p, "S")]
+    aur_pkgs = [p for p in order if not pacman_has(p, "S")]
     for pkg in pacman_pkgs:
         print(f"PACMAN {pkg}")
-    for pkg in order:
+    for pkg in aur_pkgs:
         print(f"AUR {pkg}")
 
 
