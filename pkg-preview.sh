@@ -4,48 +4,13 @@
 
 set -euo pipefail
 COLUMNS=$FZF_PREVIEW_COLUMNS
-readonly INDENT_WIDTH=18
 readonly PKG=$1
-readonly JSON_FILE="$ARF_CACHE/info/$PKG.json"
-readonly BOLD=$(tput bold || echo '')
-readonly RED=$(tput setaf 1 || echo '')
-readonly RESET=$(tput sgr0 || echo '')
+readonly FILE="$ARF_CACHE/info/$PKG.json"
 
-declare -ra KEY_ORDER=(
-    PackageBase Version Description URL License Provides Conflicts Depends OptDepends
-    MakeDepends Submitter Maintainer NumVotes Popularity FirstSubmitted LastModified
-)
-
-declare -rA LABELS=(
-    [PackageBase]='Package Base'
-    [Version]='Version'
-    [Description]='Description'
-    [URL]='Upstream URL'
-    [License]='Licenses'
-    [Provides]='Provides'
-    [Conflicts]='Conflicts With'
-    [Depends]='Depends On'
-    [OptDepends]='Optional Deps'
-    [MakeDepends]='Make Deps'
-    [Submitter]='Submitter'
-    [Maintainer]='Maintainer'
-    [NumVotes]='Votes'
-    [Popularity]='Popularity'
-    [FirstSubmitted]='First Submitted'
-    [LastModified]='Last Modified'
-)
-
-cache_is_fresh() {
-    [[ -f "$1" && $(find "$1" -mtime -1) ]]
-}
-
-print_key_value() {
-    local label=$1 value=$2
-    printf "%b%-*s%b : " "$BOLD" $((INDENT_WIDTH - 3)) "$label" "$RESET"
-    printf "%s\n" "$value" |
-        fold -s -w $((COLUMNS - INDENT_WIDTH)) |
-        sed -e '2,$s/^ //' -e "1!s/^/$(printf '%*s' $INDENT_WIDTH "")/"
-}
+if [[ -f "$FILE" && $(find "$FILE" -mtime -1) ]]; then
+    cat "$FILE"
+    exit
+fi
 
 if pacman -Si --color=always "$PKG" 2>/dev/null | sed '/^$/q'; then
     exit
@@ -61,35 +26,51 @@ if ! grep -qx "$PKG" "$ARF_CACHE/packages.txt"; then
     exit 1
 fi
 
-jq_keys=$(printf '%s\n' "${KEY_ORDER[@]}" | jq -R . | jq -s .)
+readonly INDENT_WIDTH=18
+readonly BOLD=$(tput bold || echo '')
+readonly RED=$(tput setaf 1 || echo '')
+readonly RESET=$(tput sgr0 || echo '')
 
-if ! cache_is_fresh "$JSON_FILE"; then
-    tmp_json=$(mktemp)
-    trap 'rm -f "$tmp_json"' EXIT
-    curl -fsSL "https://aur.archlinux.org/rpc/v5/info?arg=$PKG" |
-        jq -ce --arg red "$RED" --arg reset "$RESET" --argjson keys "$jq_keys" '
-        .results[0]
-        | (.. | arrays) |= join("  ")
-        | (.FirstSubmitted, .LastModified) |=
-            if . != null then (tonumber | strftime("%c")) else . end
-        | if .OutOfDate? then
-            .Version += " " + $red + "Out-of-date (" +
-            (.OutOfDate | tonumber | strftime("%Y-%m-%d")) + ")" + $reset
-          else . end
-        | .Maintainer //= ($red + "Orphan" + $reset)
-        | with_entries(select((.key as $k | $keys | index($k)) and (.value != null)))
-    ' >"$tmp_json"
-    mkdir -p "$ARF_CACHE/info"
-    mv "$tmp_json" "$JSON_FILE"
-fi
+tmp_file=$(mktemp)
+trap 'rm -f "$tmp_file"' EXIT
+curl -fsSL "https://aur.archlinux.org/rpc/v5/info?arg=$PKG" |
+    jq -re --arg red "$RED" --arg bold "$BOLD" --arg reset "$RESET" '
+    .results[0]
+    | (.. | arrays) |= join("  ")
+    | (.FirstSubmitted, .LastModified) |=
+        if . != null then (tonumber | strftime("%c")) else "None" end
+    | if .OutOfDate? then
+        .Version += " " + $red + "Out-of-date (" +
+        (.OutOfDate | tonumber | strftime("%Y-%m-%d")) + ")" + $reset
+      else . end
+    | .Maintainer //= ($red + "Orphan" + $reset) as $p |
+    [
+        "\($bold)Repository\($reset)      : AUR",
+        "\($bold)Package Base\($reset)    : \($p.PackageBase // "None")",
+        "\($bold)Version\($reset)         : \($p.Version // "None")",
+        "\($bold)Description\($reset)     : \($p.Description // "None")",
+        "\($bold)Upstream URL\($reset)    : \($p.URL // "None")",
+        "\($bold)Licenses\($reset)        : \($p.License // "None")",
+        "\($bold)Provides\($reset)        : \($p.Provides // "None")",
+        "\($bold)Conflicts With\($reset)  : \($p.Conflicts // "None")",
+        "\($bold)Depends On\($reset)      : \($p.Depends // "None")",
+        "\($bold)Optional Deps\($reset)   : \($p.OptDepends // "None")",
+        "\($bold)Make Deps\($reset)       : \($p.MakeDepends // "None")",
+        "\($bold)Submitter\($reset)       : \($p.Submitter // "None")",
+        "\($bold)Maintainer\($reset)      : \($p.Maintainer // "None")",
+        "\($bold)Votes\($reset)           : \($p.NumVotes // "None")",
+        "\($bold)Popularity\($reset)      : \($p.Popularity // "None")",
+        "\($bold)First Submitted\($reset) : \($p.FirstSubmitted // "None")",
+        "\($bold)Last Modified\($reset)   : \($p.LastModified // "None")"
+    ]
+    | .[]
+' >"$tmp_file"
 
-print_key_value "Repository" "AUR"
+mkdir -p "$ARF_CACHE/info"
+mv "$tmp_file" "$FILE"
 
-mapfile -t values < <(
-    jq -r --argjson keys "$jq_keys" '$keys[] as $k | (.[$k] // "None")' <"$JSON_FILE"
-)
-
-for i in "${!KEY_ORDER[@]}"; do
-    key="${KEY_ORDER[i]}"
-    print_key_value "${LABELS[$key]}" "${values[i]}"
-done
+while read line; do
+     printf "%s\n" "$line" |
+        fold -s -w $((COLUMNS - INDENT_WIDTH)) |
+        sed -e '2,$s/^ //' -e "1!s/^/$(printf '%*s' $INDENT_WIDTH "")/"
+done <"$FILE"
