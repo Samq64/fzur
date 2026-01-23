@@ -94,7 +94,10 @@ def build_graph(targets):
 
         deps = []
         for dep in fetch_dependencies(pkg):
-            if pacman_has(dep, "Q") or pacman_has(dep, "S"):
+            if pacman_has(dep, "Q"):
+                continue
+            if pacman_has(dep, "S"):
+                graph.setdefault(dep, set())
                 continue
             provider = find_provider(dep)
             if not provider:
