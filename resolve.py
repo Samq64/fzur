@@ -117,8 +117,9 @@ def resolve(targets):
     try:
         order = list(ts.static_order())
     except CycleError as e:
-        print(f"ERROR: Dependency cycle detected: {e}", file=sys.stderr)
-        return
+        print(f"WARNING: dependency cycle detected, {e}", file=sys.stderr)
+        for node, deps in graph.copy().items():
+             graph[node] = {d for d in deps if node not in graph.get(d, ())}
 
     pacman_pkgs = [p for p in order if pacman_has(p, "S")]
     aur_pkgs = [p for p in order if not pacman_has(p, "S")]
