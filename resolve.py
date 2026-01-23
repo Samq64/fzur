@@ -26,11 +26,8 @@ def pacman_has(pkg, scope):
 
 
 def repo_is_fresh(repo):
-    try:
-        head = repo / ".git" / "FETCH_HEAD"
+        head = repo / ".git" / "HEAD"
         return time() - head.stat().st_mtime < MAX_AGE
-    except FileNotFoundError:
-        return False
 
 
 def fetch_dependencies(pkg):
