@@ -4,6 +4,7 @@
 
 set -euo pipefail
 
+export EDITOR=${EDITOR:-nano}
 export FZF_DEFAULT_OPTS='--reverse --header-first --preview-window 75%'
 export PACMAN_AUTH=${PACMAN_AUTH:-sudo}
 export ARF_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/arf
