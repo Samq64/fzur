@@ -121,6 +121,9 @@ def resolve(targets):
         for node, deps in graph.copy().items():
              graph[node] = {d for d in deps if node not in graph.get(d, ())}
 
+        ts = TopologicalSorter(graph)
+        order = list(ts.static_order())
+
     pacman_pkgs = [p for p in order if pacman_has(p, "S")]
     aur_pkgs = [p for p in order if not pacman_has(p, "S")]
     for pkg in pacman_pkgs:
