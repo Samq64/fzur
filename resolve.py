@@ -25,9 +25,16 @@ def repos_have(pkg):
     return any(db.get_pkg(pkg) for db in handle.get_syncdbs())
 
 
+def aur_has(pkg):
+    with open(f"{CACHE_DIR}/packages.txt", "r") as f:
+        return any(pkg == line.rstrip("\n") for line in f)
+
+
 def repo_is_fresh(repo):
-        head = repo / ".git" / "HEAD"
-        return time() - head.stat().st_mtime < MAX_AGE
+    f = repo / ".git" / "FETCH_HEAD"
+    if not f.exists():
+        file = repo / ".git" / "HEAD"
+    return time() - f.stat().st_mtime < MAX_AGE
 
 
 def fetch_dependencies(pkg):
@@ -38,9 +45,8 @@ def fetch_dependencies(pkg):
             print(f"Pulling {pkg}...", file=sys.stderr)
             run(["git", "pull", "-q", "--ff-only"], cwd=repo, check=True)
     else:
-        with open(f"{CACHE_DIR}/packages.txt", "r") as f:
-            if not any(pkg == line.rstrip("\n") for line in f):
-                raise RuntimeError(f"{pkg} is not an AUR package.")
+        if not aur_has(pkg):
+            raise RuntimeError(f"{pkg} is not an AUR package.")
 
         print(f"Cloning {pkg}...", file=sys.stderr)
         run(
@@ -53,7 +59,10 @@ def fetch_dependencies(pkg):
         return [m.group(1) for line in f if (m := DEP_PATTERN.match(line))]
 
 
-def find_provider(pkg_name):
+def aur_provider(pkg_name):
+    if aur_has(pkg_name):
+        return pkg_name
+
     r = requests.get(
         "https://aur.archlinux.org/rpc/v5/search",
         params={"by": "provides", "arg": pkg_name},
@@ -96,7 +105,7 @@ def build_graph(targets):
             if repos_have(dep):
                 graph.setdefault(dep, set())
                 continue
-            provider = find_provider(dep)
+            provider = aur_provider(dep)
             if not provider:
                 raise RuntimeError(f"Unsatisfied dependency: {dep}")
             deps.append(provider)
