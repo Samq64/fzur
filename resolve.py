@@ -5,6 +5,8 @@ import sys
 from graphlib import TopologicalSorter, CycleError
 from os import environ
 from pathlib import Path
+from pyalpm import Handle, SIG_DATABASE
+from pycman.config import PacmanConfig
 from subprocess import run, DEVNULL
 from time import time
 
@@ -13,16 +15,14 @@ CACHE_DIR = Path(environ["ARF_CACHE"])
 PKGS_DIR = CACHE_DIR / "pkgbuild"
 PKGS_DIR.mkdir(parents=True, exist_ok=True)
 MAX_AGE = 3600  # 1 hour
-pacman_cache = {}
+
+config = PacmanConfig('/etc/pacman.conf')
+handle = config.initialize_alpm()
+localdb = handle.get_localdb()
 
 
-def pacman_has(pkg, scope):
-    key = (pkg, scope)
-    if key not in pacman_cache:
-        pacman_cache[key] = (
-            run(["pacman", f"-{scope}sq", f"^{pkg}$"], stdout=DEVNULL).returncode == 0
-        )
-    return pacman_cache[key]
+def repos_have(pkg):
+    return any(db.get_pkg(pkg) for db in handle.get_syncdbs())
 
 
 def repo_is_fresh(repo):
@@ -85,15 +85,15 @@ def build_graph(targets):
             return
 
         seen.add(pkg)
-        if pacman_has(pkg, "S"):
+        if repos_have(pkg):
             graph.setdefault(pkg, set())
             return
 
         deps = []
         for dep in fetch_dependencies(pkg):
-            if pacman_has(dep, "Q"):
+            if localdb.get_pkg(pkg):
                 continue
-            if pacman_has(dep, "S"):
+            if repos_have(dep):
                 graph.setdefault(dep, set())
                 continue
             provider = find_provider(dep)
@@ -124,8 +124,8 @@ def resolve(targets):
         ts = TopologicalSorter(graph)
         order = list(ts.static_order())
 
-    pacman_pkgs = [p for p in order if pacman_has(p, "S")]
-    aur_pkgs = [p for p in order if not pacman_has(p, "S")]
+    pacman_pkgs = [p for p in order if repos_have(p)]
+    aur_pkgs = [p for p in order if not repos_have(p)]
     for pkg in pacman_pkgs:
         print(f"PACMAN {pkg}")
     for pkg in aur_pkgs:
