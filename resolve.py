@@ -2,15 +2,14 @@
 import re
 import requests
 import sys
-from os import environ
+from os import getenv
 from pathlib import Path
-from pyalpm import Handle, SIG_DATABASE
 from pycman.config import PacmanConfig
 from subprocess import run
 from time import time
 
 DEP_PATTERN = re.compile(r"^\s*(?:check|make)?depends = ([\w\-.]+)")
-CACHE_DIR = Path(environ["ARF_CACHE"])
+CACHE_DIR = Path(getenv("ARF_CACHE", "~/.cache/arf")).expanduser()
 PKGS_DIR = CACHE_DIR / "pkgbuild"
 PKGS_DIR.mkdir(parents=True, exist_ok=True)
 MAX_AGE = 3600  # 1 hour
@@ -19,19 +18,18 @@ alpm_handle = PacmanConfig('/etc/pacman.conf').initialize_alpm()
 localdb = alpm_handle.get_localdb()
 
 
+with open(f"{CACHE_DIR}/packages.txt", "r") as f:
+    AUR_PKGS = {line.strip() for line in f}
+
+
 def syncdb_has(pkg):
     return any(db.get_pkg(pkg) for db in alpm_handle.get_syncdbs())
-
-
-def aur_has(pkg):
-    with open(f"{CACHE_DIR}/packages.txt", "r") as f:
-        return any(pkg == line.rstrip("\n") for line in f)
 
 
 def repo_is_fresh(repo):
     f = repo / ".git" / "FETCH_HEAD"
     if not f.exists():
-        file = repo / ".git" / "HEAD"
+        f = repo / ".git" / "HEAD"
     return time() - f.stat().st_mtime < MAX_AGE
 
 
@@ -43,7 +41,7 @@ def fetch_dependencies(pkg):
             print(f"Pulling {pkg}...", file=sys.stderr)
             run(["git", "pull", "-q", "--ff-only"], cwd=repo, check=True)
     else:
-        if not aur_has(pkg):
+        if not pkg in AUR_PKGS:
             raise RuntimeError(f"{pkg} is not an AUR package.")
 
         print(f"Cloning {pkg}...", file=sys.stderr)
@@ -58,7 +56,7 @@ def fetch_dependencies(pkg):
 
 
 def aur_provider(pkg_name):
-    if aur_has(pkg_name):
+    if pkg_name in AUR_PKGS:
         return pkg_name
 
     r = requests.get(
@@ -124,14 +122,17 @@ def resolve(targets):
     for pkg in targets:
         visit(pkg)
 
-    for pkg in pacman_pkgs:
-        print(f"PACMAN {pkg}")
-    for pkg in order:
-        print(f"AUR {pkg}")
+    return {
+        "PACMAN": pacman_pkgs,
+        "AUR": order
+    }
 
 
 def main():
-    resolve(sys.argv[1:])
+    pkgs = resolve(sys.argv[1:])
+    for label, group in pkgs.items():
+        for pkg in group:
+            print(f"{label} {pkg}")
 
 
 if __name__ == "__main__":
