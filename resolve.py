@@ -4,7 +4,9 @@ import requests
 import sys
 from os import environ
 from pathlib import Path
-from subprocess import run, DEVNULL
+from pyalpm import Handle, SIG_DATABASE
+from pycman.config import PacmanConfig
+from subprocess import run
 from time import time
 
 DEP_PATTERN = re.compile(r"^\s*(?:check|make)?depends = ([\w\-.]+)")
@@ -12,16 +14,13 @@ CACHE_DIR = Path(environ["ARF_CACHE"])
 PKGS_DIR = CACHE_DIR / "pkgbuild"
 PKGS_DIR.mkdir(parents=True, exist_ok=True)
 MAX_AGE = 3600  # 1 hour
-pacman_cache = {}
+
+alpm_handle = PacmanConfig('/etc/pacman.conf').initialize_alpm()
+localdb = alpm_handle.get_localdb()
 
 
-def pacman_has(pkg, scope):
-    key = (pkg, scope)
-    if key not in pacman_cache:
-        pacman_cache[key] = (
-            run(["pacman", f"-{scope}sq", f"^{pkg}$"], stdout=DEVNULL).returncode == 0
-        )
-    return pacman_cache[key]
+def syncdb_has(pkg):
+    return any(db.get_pkg(pkg) for db in alpm_handle.get_syncdbs())
 
 
 def aur_has(pkg):
@@ -98,7 +97,7 @@ def resolve(targets):
             print(f"WARNING: Dependency cycle detected for {pkg}", file=sys.stderr)
             return
 
-        if pacman_has(pkg, "S"):
+        if syncdb_has(pkg):
             pacman_pkgs.add(pkg)
             resolved.add(pkg)
             return
@@ -106,10 +105,10 @@ def resolve(targets):
         resolving.add(pkg)
 
         for dep in fetch_dependencies(pkg):
-            if pacman_has(dep, "Q") or dep in resolved:
+            if localdb.get_pkg(dep) or dep in resolved:
                 continue
 
-            if pacman_has(dep, "S"):
+            if syncdb_has(dep):
                 pacman_pkgs.add(dep)
                 continue
 
