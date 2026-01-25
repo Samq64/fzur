@@ -41,7 +41,7 @@ def fetch_dependencies(pkg):
             print(f"Pulling {pkg}...", file=sys.stderr)
             run(["git", "pull", "-q", "--ff-only"], cwd=repo, check=True)
     else:
-        if not pkg in AUR_PKGS:
+        if pkg not in AUR_PKGS:
             raise RuntimeError(f"{pkg} is not an AUR package.")
 
         print(f"Cloning {pkg}...", file=sys.stderr)
@@ -85,7 +85,7 @@ def resolve(targets):
     resolved = set()
     resolving = set()
     pacman_pkgs = set()
-    order = []
+    aur_order = []
 
     def visit(pkg):
         if pkg in resolved:
@@ -117,14 +117,14 @@ def resolve(targets):
 
         resolving.remove(pkg)
         resolved.add(pkg)
-        order.append(pkg)
+        aur_order.append(pkg)
 
     for pkg in targets:
         visit(pkg)
 
     return {
         "PACMAN": pacman_pkgs,
-        "AUR": order
+        "AUR": aur_order
     }
 
 
