@@ -23,7 +23,7 @@ with open(f"{CACHE_DIR}/packages.txt", "r") as f:
 
 
 def syncdb_has(pkg):
-    return any(db.get_pkg(pkg) for db in alpm_handle.get_syncdbs())
+    return any(db.search(f"^{pkg}$") for db in alpm_handle.get_syncdbs())
 
 
 def repo_is_fresh(repo):
@@ -103,7 +103,7 @@ def resolve(targets):
         resolving.add(pkg)
 
         for dep in fetch_dependencies(pkg):
-            if localdb.get_pkg(dep) or dep in resolved:
+            if localdb.search(f"^{dep}$") or dep in resolved:
                 continue
 
             if syncdb_has(dep):
