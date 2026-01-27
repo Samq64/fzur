@@ -2,15 +2,14 @@
 import re
 import requests
 import sys
-from os import getenv
-from pathlib import Path
 from pycman.config import PacmanConfig
 from subprocess import run
 from time import time
 
+from config import ARF_CACHE, PKGS_DIR
+import ui
+
 DEP_PATTERN = re.compile(r"^\s*(?:check|make)?depends = ([\w\-.]+)")
-CACHE_DIR = Path(getenv("ARF_CACHE", "~/.cache/arf")).expanduser()
-PKGS_DIR = CACHE_DIR / "pkgbuild"
 PKGS_DIR.mkdir(parents=True, exist_ok=True)
 MAX_AGE = 3600  # 1 hour
 
@@ -18,7 +17,7 @@ alpm_handle = PacmanConfig('/etc/pacman.conf').initialize_alpm()
 localdb = alpm_handle.get_localdb()
 
 
-with open(f"{CACHE_DIR}/packages.txt", "r") as f:
+with open(f"{ARF_CACHE}/packages.txt", "r") as f:
     AUR_PKGS = {line.strip() for line in f}
 
 
@@ -72,13 +71,7 @@ def aur_provider(pkg_name):
     if len(providers) == 1:
         return providers[0]
 
-    result = run(
-        ["fzf", "--header", f"Select a package to provide {pkg_name}"],
-        input="\n".join(providers),
-        text=True,
-        capture_output=True,
-    )
-    return result.stdout.strip() or None
+    return ui.select_one(providers, f"Select a package to provide {pkg_name}")
 
 
 def resolve(targets):
