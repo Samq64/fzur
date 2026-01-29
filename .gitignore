@@ -1,0 +1,33 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+.installed.cfg
+.Python
+
+# Environments
+.env
+.envrc
+.venv
+env/
+venv/
+ENV/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Tests / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editors / LSP
+.vscode/
+.ruff_cache/
