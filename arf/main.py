@@ -37,22 +37,19 @@ def get_pkg_archives(repo):
     return [pkg for pkg in packages if not EXCLUDE_PACKAGE_PATTERN.match(pkg)]
 
 
-def aur_batch_install(aur_pkgs, asdeps=True, flags=None):
+def aur_batch_install(aur_pkgs, asdeps, flags):
     built = []
-
-    makepkg_cmd = ["makepkg"]
-    if asdeps:
-        makepkg_cmd.append("--asdeps")
-    if flags:
-        makepkg_cmd += [*flags]
 
     for pkg in aur_pkgs:
         print_step(f"Installing AUR package: {pkg}", pad=True)
         repo = get_repo(pkg)
-        run_command(makepkg_cmd, cwd=repo)
+        run_command(["makepkg", *flags], cwd=repo)
         built += get_pkg_archives(repo)
 
-    run_pacman(["-U", *built])
+    if asdeps:
+        run_pacman(["-U", "--asdeps", *built])
+    else:
+        run_pacman(["-U", *built])
 
 
 def install_packages(packages, makepkg_flags=None, skip=None):
@@ -77,9 +74,9 @@ def install_packages(packages, makepkg_flags=None, skip=None):
             run_pacman(["-Dq", "--asdeps", *pacman_deps])
     if aur:
         flags = shlex.split(makepkg_flags) if makepkg_flags else []
-        for group in aur:
-            asdeps = group == aur[-1]
-            aur_batch_install(group, asdeps=asdeps, flags=flags)
+        for i, group in enumerate(aur):
+            asdeps = len(aur) - 1 != i
+            aur_batch_install(group, asdeps, flags)
 
 
 def cmd_install(args):
