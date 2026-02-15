@@ -29,35 +29,50 @@ class Resolver:
     def strip_version(self, pkg_name: str) -> str:
         return re.split(r"[<>=]", pkg_name, maxsplit=1)[0]
 
-    def fetch_aur_dependencies(self, name: str) -> set[str]:
-        repo = fetch.get_repo(name)
+    def fetch_dependencies(self, provider: str) -> set[str]:
+        if provider in self.dependency_cache:
+            return self.dependency_cache[provider]
 
-        with open(repo / ".SRCINFO", "r") as f:
-            parsed, errors = parse_srcinfo(f.read())
-            if errors:
-                raise SrcinfoParseError(name, errors)
-            deps = set(parsed.get("depends", []) + parsed.get("makedepends", []))
+        if repo_pkg := self.alpm.get_sync_package(provider):
+            deps = set(repo_pkg.depends)
+        else:
+            repo = fetch.get_repo(provider)
+            with open(repo / ".SRCINFO", "r") as f:
+                parsed, errors = parse_srcinfo(f.read())
+                if errors:
+                    raise SrcinfoParseError(provider, errors)
+                deps = set(parsed.get("depends", []) + parsed.get("makedepends", []))
+                for subpkg in parsed.get("packages", {}).values():
+                    deps.update(subpkg.get("depends", []))
 
-            for subpkg in parsed.get("packages", {}).values():
-                deps.update(subpkg.get("depends", []))
-            return deps
+        self.dependency_cache[provider] = deps
+        return deps
 
-    def get_provider(self, pkg_name: str) -> str | None:
-        repo_providers = self.alpm.get_providers(pkg_name)
+    def resolve_pkg_name(self, pkg: str) -> str | None:
+        pkg = self.strip_version(pkg)
+        if pkg in self.provider_cache:
+            return self.provider_cache[pkg]
+
+        if self.alpm.get_sync_package(pkg) or pkg in fetch.package_list():
+            self.provider_cache[pkg] = pkg
+            return pkg
+
+        repo_providers = self.alpm.get_providers(pkg)
         if repo_providers:
             providers = sorted(repo_providers)
         else:
-            if pkg_name in fetch.package_list():
-                return pkg_name
-            response = fetch.search_rpc(pkg_name, by="provides")
+            response = fetch.search_rpc(pkg, by="provides")
             providers = sorted({p["Name"] for p in response})
-            if not providers:
-                return None
 
+        if not providers:
+            return None
         if len(providers) == 1:
+            self.provider_cache[pkg] = providers[0]
             return providers[0]
 
-        return self.select_provider(pkg_name, providers)
+        selected = self.select_provider(pkg, providers)
+        self.provider_cache[pkg] = selected
+        return selected
 
     def handle_group(self, name: str, members: list) -> None:
         selected = self.select_group(name, members)
@@ -77,28 +92,15 @@ class Resolver:
             return
 
         self.resolving.add(pkg)
-        repo_provider = None
 
-        if repo_pkg := self.alpm.get_sync_package(pkg):
-            provider = pkg
-            repo_provider = repo_pkg
-        elif pkg in self.provider_cache:
-            provider = self.provider_cache[pkg]
-        elif provider := self.get_provider(pkg):
-            self.provider_cache[pkg] = provider
-        elif group_pkgs := self.alpm.get_group(pkg):
-            self.handle_group(pkg, group_pkgs)
-            return
-        else:
+        provider = self.resolve_pkg_name(pkg)
+        if not provider:
+            if group_pkgs := self.alpm.get_group(pkg):
+                self.handle_group(pkg, group_pkgs)
+                return
             raise PackageResolutionError(pkg, parent)
 
-        if provider != pkg and repo_provider is None:
-            repo_provider = self.alpm.get_sync_package(provider)
-
-        if repo_provider:
-            deps = repo_provider.depends
-        else:
-            deps = self.dependency_cache.setdefault(provider, self.fetch_aur_dependencies(provider))
+        deps = self.fetch_dependencies(provider)
 
         for dep in deps:
             self.visit(dep, parent=pkg)
@@ -106,18 +108,19 @@ class Resolver:
         self.resolving.remove(pkg)
         self.resolved.add(pkg)
 
-        if repo_provider:
+        if self.alpm.get_sync_package(provider):
             self.pacman.append({"name": provider, "dependency": parent is not None})
         else:
-            deps = [
-                dep
-                for dep in deps
-                if dep not in self.cycles
-                and not (self.alpm.get_sync_package(dep) or self.alpm.is_installed(dep))
+            aur_deps = [
+                d
+                for d in deps
+                if d not in self.cycles
+                and not (self.alpm.is_installed(d) or self.alpm.get_sync_package(d))
             ]
-            self.sorter.add(provider, *deps)
+            self.sorter.add(provider, *aur_deps)
 
     def resolve(self, targets: list[str]) -> ResolvedPackages:
+        """Resolve a list of target packages to pacman + AUR layers"""
         for pkg in targets:
             self.visit(pkg)
 
