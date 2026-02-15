@@ -22,6 +22,7 @@ class Resolver:
         self.resolved = set()
         self.resolving = set()
         self.cycles = set()
+        self.prompted_providers = set()
         self.provider_cache = {}
         self.dependency_cache = {}
         self.pacman = []
@@ -70,7 +71,12 @@ class Resolver:
         if len(providers) == 1:
             return providers[0]
 
+        for provider in providers:
+            if provider in self.prompted_providers:
+                return provider
+
         selected = self.select_provider(pkg, providers)
+        self.prompted_providers.add(selected)
         return selected
 
     def handle_group(self, name: str, members: list) -> None:
