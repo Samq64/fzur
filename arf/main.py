@@ -1,3 +1,4 @@
+import itertools
 import shlex
 import shutil
 import subprocess
@@ -36,7 +37,25 @@ def get_pkg_archives(repo):
     return [pkg for pkg in packages if not EXCLUDE_PACKAGE_PATTERN.match(pkg)]
 
 
-def install_packages(packages, makepkg_flags="", skip=None):
+def aur_batch_install(aur_pkgs, asdeps=True, flags=None):
+    built = []
+
+    makepkg_cmd = ["makepkg"]
+    if asdeps:
+        makepkg_cmd.append("--asdeps")
+    if flags:
+        makepkg_cmd += [*flags]
+
+    for pkg in aur_pkgs:
+        print_step(f"Installing AUR package: {pkg}", pad=True)
+        repo = get_repo(pkg)
+        run_command(makepkg_cmd, cwd=repo)
+        built += get_pkg_archives(repo)
+
+    run_pacman(["-U", *built])
+
+
+def install_packages(packages, makepkg_flags=None, skip=None):
     skip = skip or []
 
     print_step("Resolving dependencies...")
@@ -45,7 +64,8 @@ def install_packages(packages, makepkg_flags="", skip=None):
 
     pacman_names = [p["name"] for p in pacman]
     pacman_deps = [p["name"] for p in pacman if p.get("dependency")]
-    needs_review = sorted(p["name"] for p in aur if p["name"] not in skip)
+    all_aur = list(itertools.chain(*aur))
+    needs_review = [pkg for pkg in all_aur if pkg not in skip]
 
     if needs_review and not ui.review_prompt(needs_review):
         return
@@ -56,18 +76,10 @@ def install_packages(packages, makepkg_flags="", skip=None):
         if pacman_deps:
             run_pacman(["-Dq", "--asdeps", *pacman_deps])
     if aur:
-        batch_install = []
         flags = shlex.split(makepkg_flags) if makepkg_flags else []
-        total = len(aur)
-        for i, pkg in enumerate(aur, start=1):
-            print_step(f"Installing AUR package: {pkg['name']} ({i}/{total})", pad=True)
-            repo = get_repo(pkg["name"])
-            if pkg["dependency"]:
-                run_command(["makepkg", "--install", "--asdeps", *flags], cwd=repo)
-            else:
-                run_command(["makepkg", *flags], cwd=repo)
-                batch_install += get_pkg_archives(repo)
-        run_pacman(["-U", *batch_install])
+        for group in aur:
+            asdeps = group == aur[-1]
+            aur_batch_install(group, asdeps=asdeps, flags=flags)
 
 
 def cmd_install(args):

@@ -8,6 +8,7 @@ Arf is an fzf Pacman wrapper and AUR helper.
 - Edit PKGBUILD with Ctrl+E
 - fzf driven package provider and group prompts
 - Option to update all development (`-git`) packages
+- Minimal installation confirmations
 - No AUR dependencies
 
 ## Installation

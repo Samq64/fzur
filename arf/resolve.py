@@ -2,27 +2,29 @@ import re
 from arf import fetch
 from arf.exceptions import SrcinfoParseError, PackageResolutionError
 from arf.format import print_warning
+from graphlib import TopologicalSorter
 from srcinfo.parse import parse_srcinfo
 from typing import NamedTuple
 
 
 class ResolvedPackages(NamedTuple):
     pacman: list[dict]
-    aur: list[dict]
+    aur: list[list[str]]
 
 
 class Resolver:
     def __init__(self, alpm, select_provider, select_group):
         self.alpm = alpm
+        self.sorter = TopologicalSorter()
         self.select_provider = select_provider
         self.select_group = select_group
 
         self.resolved = set()
         self.resolving = set()
+        self.cycles = set()
         self.provider_cache = {}
         self.dependency_cache = {}
         self.pacman = []
-        self.aur = []
 
     def strip_version(self, pkg_name: str) -> str:
         return re.split(r"[<>=]", pkg_name, maxsplit=1)[0]
@@ -71,6 +73,7 @@ class Resolver:
 
         if pkg in self.resolving:
             print_warning(f"Dependency cycle detected for {pkg}")
+            self.cycles.add(pkg)
             return
 
         self.resolving.add(pkg)
@@ -106,9 +109,23 @@ class Resolver:
         if repo_provider:
             self.pacman.append({"name": provider, "dependency": parent is not None})
         else:
-            self.aur.append({"name": provider, "dependency": parent is not None})
+            deps = [
+                dep
+                for dep in deps
+                if dep not in self.cycles
+                and not (self.alpm.get_sync_package(dep) or self.alpm.is_installed(dep))
+            ]
+            self.sorter.add(provider, *deps)
 
     def resolve(self, targets: list[str]) -> ResolvedPackages:
         for pkg in targets:
             self.visit(pkg)
-        return ResolvedPackages(pacman=self.pacman, aur=self.aur)
+
+        layers = []
+        self.sorter.prepare()
+        while self.sorter.is_active():
+            ready = self.sorter.get_ready()
+            layers.append(list(ready))
+            self.sorter.done(*ready)
+
+        return ResolvedPackages(pacman=self.pacman, aur=layers)
