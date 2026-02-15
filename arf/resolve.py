@@ -112,7 +112,8 @@ class Resolver:
             deps = [
                 dep
                 for dep in deps
-                if dep not in self.cycles and not self.alpm.get_sync_package(dep)
+                if dep not in self.cycles
+                and not (self.alpm.get_sync_package(dep) or self.alpm.is_installed(dep))
             ]
             self.sorter.add(provider, *deps)
 
