@@ -12,7 +12,6 @@ requires-python = ">=3.12"
 
 dependencies = [
     "pyalpm",
-    "requests",
     "srcinfo",
 ]
 

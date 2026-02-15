@@ -1,26 +1,34 @@
 import gzip
-import requests
+import json
 import subprocess
 from arf.config import ARF_CACHE, PKGS_DIR
 from arf.exceptions import RepoFetchError, RPCError
 from functools import cache
 from io import BytesIO
 from pathlib import Path
+from urllib import request, parse, error
 
 _seen_repos = set()
 
 
-def search_rpc(query: str, by: str = "name", type: str = "search") -> list[dict]:
+def http_get(url: str, params: dict | None = None, as_json: bool = False):
+    if params:
+        query_string = parse.urlencode(params)
+        url = f"{url}?{query_string}"
+
     try:
-        response = requests.get(
-            f"https://aur.archlinux.org/rpc/v5/{type}",
-            params={"by": by, "arg": query},
-            timeout=10,
-        )
-        response.raise_for_status()
-        return response.json().get("results", [])
-    except requests.RequestException as e:
-        raise RPCError("Unable to search the AUR.") from e
+        with request.urlopen(url, timeout=10) as response:
+            return json.load(response) if as_json else response.read()
+    except error.HTTPError as e:
+        raise RPCError(f"{url} returned HTTP code {e.code}.")
+    except error.URLError as e:
+        raise RPCError(f"Failed to fetch {url}: {e.reason}")
+
+
+def search_rpc(query: str, by: str = "name", type: str = "search") -> list[dict]:
+    url = f"https://aur.archlinux.org/rpc/v5/{type}"
+    data = http_get(url, params={"by": by, "arg": query}, as_json=True)
+    return data.get("results", [])
 
 
 def download_package_list(force: bool = False) -> Path:
@@ -28,13 +36,9 @@ def download_package_list(force: bool = False) -> Path:
     if not file_path.exists() or force:
         ARF_CACHE.mkdir(parents=True, exist_ok=True)
         print("Downloading AUR package list...")
-        try:
-            response = requests.get("https://aur.archlinux.org/packages.gz", timeout=10)
-            response.raise_for_status()
-        except requests.RequestException:
-            raise RPCError("Failed to download AUR package list.")
 
-        with gzip.open(BytesIO(response.content), "rt") as gz, file_path.open("w") as f:
+        compressed_data = http_get("https://aur.archlinux.org/packages.gz")
+        with gzip.open(BytesIO(compressed_data), "rt") as gz, file_path.open("w") as f:
             for line in gz:
                 f.write(line)
 
