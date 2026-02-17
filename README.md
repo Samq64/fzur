@@ -2,6 +2,8 @@
 
 Arf is an fzf Pacman wrapper and AUR helper.
 
+![](https://github.com/Samq64/arf/blob/main/screenshot.png)
+
 ## Features
 
 - Review all build scripts at once with fzf previews
