@@ -139,14 +139,20 @@ def cmd_remove(args):
     if args.packages:
         packages = args.packages
     else:
-        items = sorted(alpm.explicit_not_required())
+        if args.cascade:
+            items = sorted(alpm.all_local_packages())
+        else:
+            items = sorted(alpm.explicit_not_required())
         packages = ui.select(
             items,
             "Select packages to remove",
             preview="COLUMNS=$FZF_PREVIEW_COLUMNS pacman -Qi",
         )
     if packages:
-        run_pacman(["-Rns", *packages])
+        if args.cascade:
+            run_pacman(["-Rnsc", *packages])
+        else:
+            run_pacman(["-Rns", *packages])
 
 
 def cmd_clean(args):

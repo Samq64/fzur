@@ -44,6 +44,7 @@ def parse_args():
     remove = subparsers.add_parser(
         "remove", aliases=["r"], help="Remove packages (interactive if none specified)"
     )
+    remove.add_argument("-c", "--cascade", action="store_true", help="Remove all dependent packages")
     remove.add_argument("packages", nargs="*", help="Packages to remove (opens fzf if omitted)")
     remove.set_defaults(func=cmd_remove)
 

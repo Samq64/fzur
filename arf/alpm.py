@@ -14,6 +14,9 @@ class Alpm:
         pattern = f"^{escape(package)}$"
         return bool(self.localdb.search(pattern))
 
+    def all_local_packages(self) -> set[str]:
+        return {pkg.name for pkg in self.localdb.pkgcache}
+
     def all_sync_packages(self) -> set[str]:
         return {pkg.name for db in self.syncdbs for pkg in db.pkgcache}
 
