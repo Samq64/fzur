@@ -123,7 +123,7 @@ class Resolver:
                 name = self.resolve_pkg_name(dep)
                 if not name:
                     continue
-                if provider in self.cycles:
+                if name in self.cycles:
                     continue
                 if self.alpm.is_installed(name) or self.alpm.get_sync_package(name):
                     continue

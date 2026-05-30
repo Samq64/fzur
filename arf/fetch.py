@@ -18,11 +18,16 @@ def http_get(url: str, params: dict | None = None, as_json: bool = False):
 
     try:
         with request.urlopen(url, timeout=10) as response:
-            return json.load(response) if as_json else response.read()
+            if as_json:
+                try:
+                    return json.load(response)
+                except json.JSONDecodeError as e:
+                    raise RPCError(f"{url} returned non-JSON response.") from e
+            return response.read()
     except error.HTTPError as e:
-        raise RPCError(f"{url} returned HTTP code {e.code}.")
+        raise RPCError(f"{url} returned HTTP code {e.code}.") from e
     except error.URLError as e:
-        raise RPCError(f"Failed to fetch {url}: {e.reason}")
+        raise RPCError(f"Failed to fetch {url}: {e.reason}") from e
 
 
 def search_rpc(query: str, by: str = "name", type: str = "search") -> list[dict]:
