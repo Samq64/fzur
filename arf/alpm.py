@@ -11,6 +11,8 @@ class Alpm:
         self.syncdbs = self.handle.get_syncdbs()
 
     def is_installed(self, package: str) -> bool:
+        # Unlike get_pkg(), search() with an exact match includes providers
+        # e.g. ttf-font -> noto-fonts
         pattern = f"^{escape(package)}$"
         return bool(self.localdb.search(pattern))
 

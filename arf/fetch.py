@@ -33,6 +33,8 @@ def http_get(url: str, params: dict | None = None, as_json: bool = False):
 def search_rpc(query: str, by: str = "name", type: str = "search") -> list[dict]:
     url = f"https://aur.archlinux.org/rpc/v5/{type}"
     data = http_get(url, params={"by": by, "arg": query}, as_json=True)
+    if not isinstance(data, dict):
+        raise RPCError(f"Unexpected response from AUR RPC: {url}")
     return data.get("results", [])
 
 

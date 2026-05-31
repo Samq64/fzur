@@ -32,7 +32,7 @@ def run_pacman(args):
 
 def get_pkg_archives(repo):
     proc = subprocess.run(
-        ["makepkg", "--packagelist"], text=True, capture_output=True, cwd=str(repo)
+        ["makepkg", "--packagelist"], text=True, capture_output=True, cwd=str(repo), check=True
     )
     packages = proc.stdout.strip().splitlines()
     return [pkg for pkg in packages if not EXCLUDE_PACKAGE_PATTERN.match(pkg)]

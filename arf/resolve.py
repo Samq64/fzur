@@ -76,7 +76,8 @@ class Resolver:
                 return provider
 
         selected = self.select_provider(pkg, providers)
-        self.prompted_providers.add(selected)
+        if selected:
+            self.prompted_providers.add(selected)
         return selected
 
     def handle_group(self, name: str, members: list) -> None:
