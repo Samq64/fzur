@@ -10,3 +10,4 @@ PACMAN_AUTH = environ.get("PACMAN_AUTH", "sudo")
 DEFAULT_FZF_CMD = ["fzf", "--ansi", "--reverse", "--header-first", "--preview-window=75%"]
 PREVIEW_SCRIPTS = files("arf").joinpath("previews")
 EXCLUDE_PACKAGE_PATTERN = re.compile(r".*-(bin-debug.*|debug-.+-any)\.pkg\.tar\.zst")
+VCS_SUFFIXES = ("-git", "-svn", "-hg", "-bzr", "-cvs")

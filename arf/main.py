@@ -5,7 +5,7 @@ import subprocess
 import sys
 from arf import ui
 from arf.alpm import Alpm
-from arf.config import ARF_CACHE, EXCLUDE_PACKAGE_PATTERN, PACMAN_AUTH, PKGS_DIR
+from arf.config import ARF_CACHE, EXCLUDE_PACKAGE_PATTERN, PACMAN_AUTH, PKGS_DIR, VCS_SUFFIXES
 from arf.exceptions import SrcinfoParseError
 from arf.fetch import download_package_list, get_repo, package_list
 from arf.format import Colors, print_step, print_error, print_warning
@@ -129,7 +129,9 @@ def cmd_update(args):
 
             installed_version = alpm.get_local_package(pkg).version
             new_version = srcinfo["pkgver"] + "-" + srcinfo["pkgrel"]
-            if vercmp(installed_version, new_version) < 0 or (args.devel and pkg.endswith("-git")):
+            if vercmp(installed_version, new_version) < 0 or (
+                args.devel and pkg.endswith(VCS_SUFFIXES)
+            ):
                 updates.append(pkg)
 
         if not updates:
