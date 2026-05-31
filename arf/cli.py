@@ -8,6 +8,7 @@ from arf.main import (
     cmd_remove,
     cmd_clean,
     cmd_sync,
+    cmd_reason,
 )
 
 
@@ -47,6 +48,21 @@ def parse_args():
     remove.add_argument("-c", "--cascade", action="store_true", help="Remove all dependent packages")
     remove.add_argument("packages", nargs="*", help="Packages to remove (opens fzf if omitted)")
     remove.set_defaults(func=cmd_remove)
+
+    reason = subparsers.add_parser(
+        "reason", help="Change the installation reason of packages (interactive if none specified)"
+    )
+    reason.set_defaults(func=cmd_reason)
+    reason.add_argument(
+        "packages", nargs="*", help="Packages to set install reason on (opens fzf if omitted)"
+    )
+    group = reason.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        "-d", "--asdeps", action="store_true", help="Mark as dependencies of another package"
+    )
+    group.add_argument(
+        "-e", "--asexplicit", action="store_true", help="Mark as explicitly installed by the user"
+    )
 
     clean = subparsers.add_parser("clean", aliases=["c"], help="Remove orphans and clean cache")
     clean.set_defaults(func=cmd_clean)

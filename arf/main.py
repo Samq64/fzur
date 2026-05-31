@@ -155,6 +155,30 @@ def cmd_remove(args):
             run_pacman(["-Rns", *packages])
 
 
+def cmd_reason(args):
+    packages = []
+    if args.packages:
+        packages = args.packages
+    else:
+        if args.asexplicit:
+            packages = ui.select(
+                sorted(alpm.dependencies()),
+                "Mark as explicitly installed",
+                preview="COLUMNS=$FZF_PREVIEW_COLUMNS pacman -Qi",
+            )
+        elif args.asdeps:
+            packages = ui.select(
+                sorted(alpm.explicit()),
+                "Mark as dependencies",
+                preview="COLUMNS=$FZF_PREVIEW_COLUMNS pacman -Qi",
+            )
+    if packages:
+        if args.asdeps:
+            run_pacman(["-Dq", "--asdeps", *packages])
+        elif args.asexplicit:
+            run_pacman(["-Dq", "--asexplicit", *packages])
+
+
 def cmd_clean(args):
     orphans = alpm.orphans()
     if orphans:

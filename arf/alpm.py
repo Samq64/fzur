@@ -27,9 +27,16 @@ class Alpm:
             if pkg.reason == pyalpm.PKG_REASON_EXPLICIT and not pkg.compute_requiredby()
         }
 
+    def explicit(self) -> set[str]:
+        return {
+            pkg.name for pkg in self.localdb.pkgcache if pkg.reason == pyalpm.PKG_REASON_EXPLICIT
+        }
+
+    def dependencies(self) -> set[str]:
+        return self.all_local_packages() - self.explicit()
+
     def foreign_packages(self) -> set[str]:
-        sync_packages = self.all_sync_packages()
-        return {pkg.name for pkg in self.localdb.pkgcache if pkg.name not in sync_packages}
+        return self.all_local_packages() - self.all_sync_packages()
 
     def orphans(self) -> set[str]:
         return {
