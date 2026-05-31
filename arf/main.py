@@ -10,6 +10,7 @@ from arf.exceptions import SrcinfoParseError
 from arf.fetch import download_package_list, get_repo, package_list
 from arf.format import Colors, print_step, print_error, print_warning
 from arf.resolve import Resolver
+from pathlib import Path
 from pyalpm import vercmp
 from srcinfo.parse import parse_srcinfo
 
@@ -43,8 +44,13 @@ def aur_batch_install(aur_pkgs, asdeps, flags):
     for pkg in aur_pkgs:
         print_step(f"Installing AUR package: {pkg}", pad=True)
         repo = get_repo(pkg)
-        run_command(["makepkg", *flags], cwd=repo)
-        built += get_pkg_archives(repo)
+        archives = get_pkg_archives(repo)
+        if all(Path(p).exists() for p in archives):
+            print_warning(f"{pkg} has already been built.")
+        else:
+            run_command(["makepkg", *flags], cwd=repo)
+            archives = get_pkg_archives(repo)
+        built += archives
 
     if asdeps:
         run_pacman(["-U", "--asdeps", *built])
