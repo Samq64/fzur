@@ -72,7 +72,7 @@ class Resolver:
             return providers[0]
 
         for provider in providers:
-            if provider in self.prompted_providers:
+            if provider in self.prompted_providers or self.alpm.is_installed(provider):
                 return provider
 
         selected = self.select_provider(pkg, providers)
