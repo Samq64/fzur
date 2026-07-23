@@ -83,10 +83,12 @@ def cmd_install(args):
     packages = args.packages
     if not packages:
         items = []
+        pacman_packages = set()
         if not args.aur_only:
-            items += sorted(alpm.all_sync_packages())
+            pacman_packages = alpm.all_sync_packages()
+            items += sorted(pacman_packages)
         if not args.no_aur:
-            aur_packages = sorted(package_list())
+            aur_packages = sorted(package_list() - pacman_packages)
             if items:
                 items += [Colors.DIM + pkg + Colors.RESET for pkg in aur_packages]
             else:
