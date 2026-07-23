@@ -13,10 +13,11 @@ Arf is an fzf Pacman wrapper and AUR helper.
 - Minimal installation confirmations
 - No AUR dependencies
 
-## Installation
+## AUR Installation
+
 ```sh
 sudo pacman -S --needed base-devel git
-git clone https://aur.archlinux.org/arf-git.git
+git clone https://aur.archlinux.org/arf-helper.git
 cd arf-git
 makepkg -si
 ```
@@ -24,3 +25,5 @@ makepkg -si
 ## Usage
 
 The default behaviour is to install packages interactively. Run `arf --help` for a list of subcommands. Each subcommand also has a `--help` flag.
+
+If running directly from source replace `arf` with `python -m arf.cli` in the project root.
